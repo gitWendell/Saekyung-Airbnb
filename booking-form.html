@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Book Your Stay — Cebu Condos</title>
+<style>
+  :root{
+    --ink:#1b2a2f; --ink-soft:#4a5b60; --line:#e2ddd2; --paper:#f7f4ec;
+    --card:#ffffff; --sea:#0e7c86; --sea-deep:#0a5860; --sel-soft:#d5ecee;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);line-height:1.6;padding:24px;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:480px;margin:0 auto}
+  header{text-align:center;padding:6px 0 18px}
+  h1{font-size:24px;font-weight:600;margin:0 0 4px}
+  .sub{color:var(--ink-soft);font-size:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:24px}
+  .summary{background:var(--sel-soft);border:1px solid var(--sea);border-radius:12px;padding:14px 16px;margin-bottom:8px}
+  .summary .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--sea);font-weight:600}
+  .summary .val{font-size:16px;font-weight:600;margin-top:2px}
+  .back{display:inline-block;color:var(--sea);text-decoration:none;font-size:13px;margin:10px 0 20px}
+  .back:hover{text-decoration:underline}
+  label{display:block;font-size:14px;font-weight:600;margin:16px 0 6px}
+  label .req{color:#d85a30}
+  input{width:100%;padding:12px 14px;border:1px solid var(--line);border-radius:10px;font-size:15px;font-family:inherit;color:var(--ink);transition:.15s}
+  input:focus{outline:none;border-color:var(--sea);box-shadow:0 0 0 3px var(--sel-soft)}
+  .err{color:#d85a30;font-size:13px;margin-top:6px;display:none}
+  .cta{width:100%;margin-top:24px;padding:15px;background:var(--sea);color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:600;cursor:pointer;transition:.15s;font-family:inherit}
+  .cta:hover{background:var(--sea-deep)}
+  .cta:disabled{background:#b8c4c5;cursor:wait}
+  .formerr{background:#fbeeee;border:1px solid #e0b4b4;color:#9a3535;padding:12px;border-radius:10px;font-size:13px;margin-top:14px;display:none}
+  .loading-overlay{display:none;text-align:center;padding:40px 0;color:var(--ink-soft)}
+  footer{text-align:center;font-size:12px;color:#a89f8c;padding:16px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Book your stay</h1>
+    <div class="sub">Just a few details to hold your dates.</div>
+  </header>
+
+  <div class="card">
+    <div class="summary">
+      <div class="lbl">Your selection</div>
+      <div class="val" id="summary">Loading your booking…</div>
+    </div>
+    <a class="back" id="back" href="#">← Back to calendar</a>
+
+    <div id="formwrap">
+      <label>Facebook name <span class="req">*</span></label>
+      <input id="fb_name" type="text" placeholder="The name on your Facebook profile" autocomplete="name">
+      <div class="err" id="e-fb">Please enter your Facebook name.</div>
+
+      <label>Email <span class="req">*</span></label>
+      <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
+      <div class="err" id="e-email">Please enter a valid email.</div>
+
+      <label>Mobile number <span class="req">*</span></label>
+      <input id="mobile" type="tel" placeholder="09XX XXX XXXX" autocomplete="tel">
+      <div class="err" id="e-mobile">Please enter your mobile number.</div>
+
+      <label>Number of guests <span class="req">*</span></label>
+      <input id="guests" type="number" min="1" max="10" value="2">
+      <div class="err" id="e-guests">Please enter number of guests.</div>
+
+      <button class="cta" id="submit">Reserve my dates</button>
+      <div class="formerr" id="formerr"></div>
+    </div>
+
+    <div class="loading-overlay" id="loading">Checking availability and preparing your payment…</div>
+  </div>
+
+  <footer>Payments secured via PayMongo · GCash, Maya, cards &amp; online banking</footer>
+</div>
+
+<script>
+// ===== CONFIG =====
+const SUBMIT_WEBHOOK = "https://wendell-things.app.n8n.cloud/webhook/airbnb-book";
+const CALENDAR_URL = "https://saekyung-airbnb.github.io/Saekyung-Airbnb/"; // update if your GitHub Pages path differs
+const UNIT_LABELS = { B301: "B301 · 16F City View", B305: "B305 · 15F Pool View" };
+// ==================
+
+const qs = new URLSearchParams(location.search);
+const unit = qs.get('unit') || '';
+const checkIn = qs.get('check_in') || '';
+const checkOut = qs.get('check_out') || '';
+
+function fmt(iso){
+  if(!iso) return '';
+  const [y,m,d] = iso.split('-').map(Number);
+  const dt = new Date(y, m-1, d);
+  return dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+}
+
+// Fill the summary line
+if(unit && checkIn && checkOut){
+  document.getElementById('summary').textContent =
+    `${UNIT_LABELS[unit]||unit} · ${fmt(checkIn)} → ${fmt(checkOut)}`;
+} else {
+  document.getElementById('summary').textContent = 'No dates selected — please go back to the calendar.';
+}
+
+// Back button returns to the calendar
+document.getElementById('back').href = CALENDAR_URL;
+
+// Validation + submit
+const el = id => document.getElementById(id);
+function showErr(id, on){ el(id).style.display = on ? 'block' : 'none'; }
+
+el('submit').onclick = async () => {
+  const fb = el('fb_name').value.trim();
+  const email = el('email').value.trim();
+  const mobile = el('mobile').value.trim();
+  const guests = parseInt(el('guests').value, 10);
+
+  let ok = true;
+  showErr('e-fb', !fb); if(!fb) ok = false;
+  const emailOk = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email);
+  showErr('e-email', !emailOk); if(!emailOk) ok = false;
+  showErr('e-mobile', !mobile); if(!mobile) ok = false;
+  showErr('e-guests', !(guests>=1)); if(!(guests>=1)) ok = false;
+  if(!unit || !checkIn || !checkOut){ el('formerr').textContent = 'Missing your dates. Please go back to the calendar and pick again.'; el('formerr').style.display='block'; ok=false; }
+  if(!ok) return;
+
+  el('submit').disabled = true;
+  el('submit').textContent = 'Reserving…';
+  el('formerr').style.display = 'none';
+
+  try{
+    const res = await fetch(SUBMIT_WEBHOOK, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ unit, check_in: checkIn, check_out: checkOut, fb_name: fb, email, mobile, guests })
+    });
+    const data = await res.json();
+    if(data && data.checkout_url){
+      window.location.href = data.checkout_url;   // straight to PayMongo
+    } else if(data && data.unavailable){
+      el('formwrap').style.display='none';
+      el('summary').textContent = 'Those dates were just taken.';
+      el('formerr').textContent = (data.reason||'Those dates are no longer available.') + ' Please go back and choose different dates.';
+      el('formerr').style.display='block';
+      el('submit').style.display='none';
+    } else {
+      throw new Error('Unexpected response');
+    }
+  }catch(e){
+    el('submit').disabled = false;
+    el('submit').textContent = 'Reserve my dates';
+    el('formerr').textContent = 'Something went wrong reserving your dates. Please try again, or message us on Facebook.';
+    el('formerr').style.display = 'block';
+  }
+};
+</script>
+</body>
+</html>
