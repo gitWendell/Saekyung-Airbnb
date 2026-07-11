@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin — Confirm Bookings</title>
+<style>
+  :root{
+    --ink:#1b2a2f; --ink-soft:#4a5b60; --line:#e2ddd2; --paper:#f7f4ec;
+    --card:#ffffff; --sea:#0e7c86; --sea-deep:#0a5860; --sel-soft:#d5ecee;
+    --pending:#f4b740; --pending-soft:#fdf2d8; --confirmed:#3aa76d; --confirmed-soft:#dbf0e4;
+    --blocked:#9aa0a6; --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);line-height:1.6;padding:18px}
+  .wrap{max-width:720px;margin:0 auto}
+  header{text-align:center;padding:8px 0 16px}
+  h1{font-size:22px;font-weight:700}
+  .sub{color:var(--ink-soft);font-size:14px}
+  .toolbar{display:flex;gap:10px;justify-content:center;margin-bottom:16px;flex-wrap:wrap}
+  .toolbar button{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 14px;font-size:14px;cursor:pointer;font-family:inherit}
+  .toolbar button.active{background:var(--sea);color:#fff;border-color:var(--sea)}
+  .legend{display:flex;gap:14px;justify-content:center;margin-bottom:16px;flex-wrap:wrap;font-size:13px;color:var(--ink-soft)}
+  .legend div{display:flex;align-items:center;gap:6px}
+  .dot{width:12px;height:12px;border-radius:3px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px}
+  .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .calhead .mon{font-size:16px;font-weight:700}
+  .nav{display:flex;gap:6px}
+  .nav button{width:34px;height:34px;border:1px solid var(--line);background:var(--card);border-radius:8px;cursor:pointer;font-size:16px}
+  .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px}
+  .dow span{text-align:center;font-size:11px;font-weight:600;color:var(--ink-soft)}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .day{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:4px;font-size:13px;border-radius:8px;border:1px solid transparent;position:relative}
+  .day.empty{background:transparent}
+  .day .n{font-weight:500}
+  .day .mk{width:100%;margin-top:2px;display:flex;flex-direction:column;gap:1px;padding:0 2px}
+  .pill{font-size:8px;line-height:1.3;border-radius:3px;padding:1px 2px;color:#fff;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .pill.pending{background:var(--pending);color:#5a4300}
+  .pill.confirmed{background:var(--confirmed)}
+  .pill.blocked{background:var(--blocked)}
+
+  .list-card{margin-bottom:10px;border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+  .list-card .info{font-size:14px}
+  .list-card .info b{font-size:15px}
+  .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em}
+  .badge.pending{background:var(--pending-soft);color:#8a6516}
+  .badge.confirmed{background:var(--confirmed-soft);color:#1f6b45}
+  .review-btn{background:var(--sea);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:18px;z-index:20}
+  .modal-bg.show{display:flex}
+  .modal{background:#fff;border-radius:16px;padding:24px;max-width:440px;width:100%;max-height:90vh;overflow-y:auto}
+  .modal h2{font-size:19px;margin-bottom:4px}
+  .modal .msub{color:var(--ink-soft);font-size:13px;margin-bottom:16px}
+  .drow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ece2;font-size:14px}
+  .drow:last-of-type{border-bottom:none}
+  .drow .k{color:var(--ink-soft)}
+  .drow .v{font-weight:600;text-align:right}
+  .verify{background:var(--pending-soft);border:1px solid var(--pending);border-radius:10px;padding:12px;font-size:13px;color:#7a5a12;margin:14px 0}
+  .rolerow{margin:16px 0 6px;font-size:14px;font-weight:700}
+  .roles{display:flex;gap:10px;margin-bottom:8px}
+  .role{flex:1;border:2px solid var(--line);border-radius:10px;padding:12px;text-align:center;cursor:pointer;font-weight:600}
+  .role.sel{border-color:var(--sea);background:var(--sel-soft);color:var(--sea-deep)}
+  .modal .actions{display:flex;gap:10px;margin-top:18px}
+  .btn-cancel{flex:1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;font-size:15px;cursor:pointer;font-family:inherit}
+  .btn-confirm{flex:2;background:var(--confirmed);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+  .btn-confirm:disabled{background:#b8c4c5;cursor:not-allowed}
+  .already{text-align:center;color:var(--confirmed);font-weight:700;padding:12px;background:var(--confirmed-soft);border-radius:10px;margin-top:14px}
+  .loading{text-align:center;padding:30px;color:var(--ink-soft)}
+  .msg{text-align:center;padding:10px;border-radius:8px;margin-top:10px;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Booking Confirmations</h1>
+    <div class="sub">Verify payment in GoTyme + Messenger, then confirm.</div>
+  </header>
+
+  <div class="toolbar">
+    <button id="tab-pending" class="active">⏳ Pending review</button>
+    <button id="tab-cal">📅 Calendar</button>
+  </div>
+
+  <div class="legend">
+    <div><span class="dot" style="background:var(--pending)"></span> Pending payment</div>
+    <div><span class="dot" style="background:var(--confirmed)"></span> Confirmed</div>
+    <div><span class="dot" style="background:var(--blocked)"></span> Blocked</div>
+  </div>
+
+  <div id="pending-view">
+    <div class="loading" id="pending-loading">Loading bookings…</div>
+    <div id="pending-list"></div>
+  </div>
+
+  <div id="cal-view" style="display:none">
+    <div class="card">
+      <div class="calhead">
+        <div class="mon" id="mon">—</div>
+        <div class="nav"><button id="prev">‹</button><button id="next">›</button></div>
+      </div>
+      <div class="dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+      <div class="grid" id="grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modal-bg">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script>
+const LIST_API = "https://wendell-things.app.n8n.cloud/webhook/admin-bookings";
+const CONFIRM_API = "https://wendell-things.app.n8n.cloud/webhook/admin-confirm-booking";
+const UNIT_LABELS = { B301:"B301 · 16F City View", B305:"B305 · 15F Pool View" };
+
+let bookings = [];
+let view = new Date(); view.setDate(1);
+let selectedRole = null;
+let activeBooking = null;
+
+const iso = d => d.toISOString().slice(0,10);
+const parse = s => { const [y,m,d]=String(s).split('-').map(Number); return new Date(y,m-1,d); };
+const fmt = s => s ? parse(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+
+async function load(){
+  try{
+    const r = await fetch(LIST_API);
+    const data = await r.json();
+    bookings = (data && data.bookings) ? data.bookings : [];
+  }catch(e){ bookings = []; }
+  renderPending();
+  renderCal();
+}
+
+function renderPending(){
+  document.getElementById('pending-loading').style.display='none';
+  const pend = bookings.filter(b => b.status === 'pending_payment');
+  const wrap = document.getElementById('pending-list');
+  if(!pend.length){ wrap.innerHTML = '<div class="card" style="text-align:center;color:#888">No bookings waiting for confirmation right now. 🎉</div>'; return; }
+  wrap.innerHTML = pend.map(b => `
+    <div class="list-card">
+      <div class="info"><b>${b.guest_name||b.fb_name||'Guest'}</b> · ${UNIT_LABELS[b.unit]||b.unit}<br>
+        ${fmt(b.check_in)} → ${fmt(b.check_out)} · ${b.guests||1} guest(s)<br>
+        <span class="badge pending">Pending</span></div>
+      <button class="review-btn" onclick="openModal('${b.booking_id}')">Review</button>
+    </div>`).join('');
+}
+
+function renderCal(){
+  const y=view.getFullYear(), m=view.getMonth();
+  document.getElementById('mon').textContent = new Date(y,m,1).toLocaleString('en-US',{month:'long',year:'numeric'});
+  const start=new Date(y,m,1).getDay(), days=new Date(y,m+1,0).getDate();
+  let html='';
+  for(let i=0;i<start;i++) html+='<div class="day empty"></div>';
+  for(let d=1;d<=days;d++){
+    const dISO=iso(new Date(y,m,d));
+    const onDay = bookings.filter(b => dISO >= b.check_in && dISO < b.check_out);
+    let pills = onDay.map(b => `<div class="pill ${b.status==='confirmed'?'confirmed':b.status==='blocked'?'blocked':'pending'}" onclick="openModal('${b.booking_id}')">${(b.guest_name||b.unit||'').split(' ')[0]}</div>`).join('');
+    html += `<div class="day"><span class="n">${d}</span><div class="mk">${pills}</div></div>`;
+  }
+  document.getElementById('grid').innerHTML = html;
+}
+
+function openModal(id){
+  const b = bookings.find(x => x.booking_id === id);
+  if(!b) return;
+  activeBooking = b; selectedRole = null;
+  const isConfirmed = b.status === 'confirmed';
+  const m = document.getElementById('modal');
+  m.innerHTML = `
+    <h2>${b.guest_name||b.fb_name||'Guest'}</h2>
+    <div class="msub">${UNIT_LABELS[b.unit]||b.unit} · Ref ${b.booking_id}</div>
+    <div class="drow"><span class="k">Check-in</span><span class="v">${fmt(b.check_in)}</span></div>
+    <div class="drow"><span class="k">Check-out</span><span class="v">${fmt(b.check_out)}</span></div>
+    <div class="drow"><span class="k">Guests</span><span class="v">${b.guests||1}</span></div>
+    <div class="drow"><span class="k">Mobile</span><span class="v">${b.mobile||'—'}</span></div>
+    <div class="drow"><span class="k">Email</span><span class="v">${b.email||'—'}</span></div>
+    <div class="drow"><span class="k">Status</span><span class="v">${b.status}</span></div>
+    ${isConfirmed ? `<div class="already">✓ Already confirmed by ${b.confirmed_by||'—'}</div>
+      <div class="actions"><button class="btn-cancel" onclick="closeModal()" style="flex:1">Close</button></div>`
+    : `<div class="verify">💡 Before confirming: check your GoTyme app for a ₱500 payment and match the Messenger screenshot from this guest.</div>
+      <div class="rolerow">Who is confirming?</div>
+      <div class="roles">
+        <div class="role" id="role-owner" onclick="pickRole('Owner')">👤 Owner</div>
+        <div class="role" id="role-agent" onclick="pickRole('Agent')">🧑‍💼 Agent</div>
+      </div>
+      <div class="actions">
+        <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+        <button class="btn-confirm" id="confirmBtn" onclick="confirmBooking()" disabled>Confirm payment ✓</button>
+      </div>
+      <div class="msg" id="modal-msg"></div>`}
+  `;
+  document.getElementById('modal-bg').classList.add('show');
+}
+function pickRole(role){
+  selectedRole = role;
+  document.getElementById('role-owner').classList.toggle('sel', role==='Owner');
+  document.getElementById('role-agent').classList.toggle('sel', role==='Agent');
+  document.getElementById('confirmBtn').disabled = false;
+}
+function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); activeBooking=null; }
+document.getElementById('modal-bg').addEventListener('click', e => { if(e.target.id==='modal-bg') closeModal(); });
+
+async function confirmBooking(){
+  if(!activeBooking || !selectedRole) return;
+  const btn = document.getElementById('confirmBtn');
+  btn.disabled = true; btn.textContent = 'Confirming…';
+  try{
+    const r = await fetch(CONFIRM_API, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ booking_id: activeBooking.booking_id, confirmed_by: selectedRole }) });
+    const data = await r.json();
+    if(data && data.ok){
+      const b = bookings.find(x=>x.booking_id===activeBooking.booking_id);
+      if(b){ b.status='confirmed'; b.confirmed_by=selectedRole; }
+      closeModal(); renderPending(); renderCal();
+    } else throw new Error();
+  }catch(e){
+    btn.disabled=false; btn.textContent='Confirm payment ✓';
+    const msg=document.getElementById('modal-msg'); msg.style.display='block'; msg.style.background='#fbeeee'; msg.style.color='#9a3535';
+    msg.textContent='Something went wrong. Please try again.';
+  }
+}
+
+document.getElementById('tab-pending').onclick = () => {
+  document.getElementById('tab-pending').classList.add('active');
+  document.getElementById('tab-cal').classList.remove('active');
+  document.getElementById('pending-view').style.display='block';
+  document.getElementById('cal-view').style.display='none';
+};
+document.getElementById('tab-cal').onclick = () => {
+  document.getElementById('tab-cal').classList.add('active');
+  document.getElementById('tab-pending').classList.remove('active');
+  document.getElementById('cal-view').style.display='block';
+  document.getElementById('pending-view').style.display='none';
+};
+document.getElementById('prev').onclick = () => { view.setMonth(view.getMonth()-1); renderCal(); };
+document.getElementById('next').onclick = () => { view.setMonth(view.getMonth()+1); renderCal(); };
+
+load();
+</script>
+</body>
+</html>
