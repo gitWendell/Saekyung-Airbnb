@@ -136,8 +136,8 @@ el('submit').onclick = async () => {
       body: JSON.stringify({ unit, check_in: checkIn, check_out: checkOut, fb_name: fb, email, mobile, guests })
     });
     const data = await res.json();
-    if(data && data.checkout_url){
-      window.location.href = data.checkout_url;   // straight to PayMongo
+    if(data && data.qr_url){
+      window.location.href = data.qr_url;   // go to GoTyme QR payment page
     } else if(data && data.unavailable){
       el('formwrap').style.display='none';
       el('summary').textContent = 'Those dates were just taken.';
