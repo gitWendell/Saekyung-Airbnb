@@ -31,6 +31,9 @@
   .cta:hover{background:var(--sea-deep)}
   .cta:disabled{background:#b8c4c5;cursor:wait}
   .formerr{background:#fbeeee;border:1px solid #e0b4b4;color:#9a3535;padding:12px;border-radius:10px;font-size:13px;margin-top:14px;display:none}
+  .riskbox{background:#fdf2d8;border:1px solid #f4b740;border-radius:12px;padding:13px 15px;margin-top:12px;font-size:13px;color:#6d4f10;display:none;line-height:1.5}
+  .riskbox.show{display:block}
+  .riskbox b{display:block;font-size:14px;margin-bottom:3px;color:#5a4300}
   .loading-overlay{display:none;text-align:center;padding:40px 0;color:var(--ink-soft)}
   footer{text-align:center;font-size:12px;color:#a89f8c;padding:16px 0}
 </style>
@@ -47,6 +50,7 @@
       <div class="lbl">Your selection</div>
       <div class="val" id="summary">Loading your booking…</div>
     </div>
+    <div class="riskbox" id="risk"></div>
     <a class="back" id="back" href="#">← Back to calendar</a>
 
     <div id="formwrap">
@@ -73,12 +77,13 @@
     <div class="loading-overlay" id="loading">Checking availability and preparing your payment…</div>
   </div>
 
-  <footer>Payments secured via PayMongo · GCash, Maya, cards &amp; online banking</footer>
+  <footer>Pay by GCash, Maya or bank transfer via GoTyme QR</footer>
 </div>
 
 <script>
 // ===== CONFIG =====
 const SUBMIT_WEBHOOK = "https://cheff-things.app.n8n.cloud/webhook/airbnb-book";
+const AVAILABILITY_API = "https://cheff-things.app.n8n.cloud/webhook/availability";
 const CALENDAR_URL = "https://gitwendell.github.io/Saekyung-Airbnb/";
 const UNIT_LABELS = { B301: "B301 · 16F City View", B305: "B305 · 15F Pool View" };
 // ==================
@@ -108,6 +113,29 @@ document.getElementById('back').href = CALENDAR_URL;
 
 // Validation + submit
 const el = id => document.getElementById(id);
+let ctaLabel = 'Reserve my dates';
+
+// Only confirmed bookings close a date. Unverified "I've paid" claims (holds) leave the
+// dates open, so the guest must be told plainly that they may be paying into a race —
+// and that losing it costs them nothing.
+async function loadHolds(){
+  if(!(unit && checkIn && checkOut)) return;
+  try{
+    const r = await fetch(AVAILABILITY_API, {headers:{'Accept':'application/json'}});
+    const data = await r.json();
+    const list = (data && data.holds && data.holds[unit]) || [];
+    const n = list.filter(h => h.check_in < checkOut && h.check_out > checkIn).length;
+    if(!n) return;
+    el('risk').innerHTML = `<b>⏳ ${n} other ${n===1?'guest has':'guests have'} already paid for these dates</b>
+      We haven't verified ${n===1?'that payment':'those payments'} yet, so the dates are still open —
+      but whoever we verify first gets the room. You can still book and pay now.
+      If someone else is confirmed ahead of you, we refund your ₱500 in full, automatically.`;
+    el('risk').classList.add('show');
+    ctaLabel = 'Reserve anyway — full refund if I lose';
+    el('submit').textContent = ctaLabel;
+  }catch(e){ /* non-fatal — the booking API re-checks availability on submit anyway */ }
+}
+loadHolds();
 function showErr(id, on){ el(id).style.display = on ? 'block' : 'none'; }
 
 el('submit').onclick = async () => {
@@ -149,7 +177,7 @@ el('submit').onclick = async () => {
     }
   }catch(e){
     el('submit').disabled = false;
-    el('submit').textContent = 'Reserve my dates';
+    el('submit').textContent = ctaLabel;
     el('formerr').textContent = 'Something went wrong reserving your dates. Please try again, or message us on Facebook.';
     el('formerr').style.display = 'block';
   }

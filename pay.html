@@ -34,6 +34,14 @@
   .dl-btn{display:inline-block;margin-top:14px;background:var(--sand);color:#3a2a00;padding:13px 24px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px}
   .dl-btn:hover{filter:brightness(1.05)}
   .fb-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin-top:8px;background:#0866ff;color:#fff;padding:16px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px}
+  .reflbl{display:block;font-size:15px;font-weight:700;margin:20px 0 6px;text-align:left}
+  .refin{width:100%;padding:14px;border:1px solid var(--line);border-radius:10px;font-size:17px;font-family:inherit;color:var(--ink);letter-spacing:.02em}
+  .refin:focus{outline:none;border-color:var(--sea);box-shadow:0 0 0 3px var(--sel-soft)}
+  .refhint{font-size:12.5px;color:var(--ink-soft);margin-top:6px;text-align:left}
+  .referr{color:#d85a30;font-size:13px;margin-top:6px;display:none;text-align:left}
+  .holdwarn{background:#fdf2d8;border:1px solid #f4b740;border-radius:12px;padding:13px 15px;margin-bottom:18px;font-size:13.5px;color:#6d4f10;display:none;text-align:left;line-height:1.5}
+  .holdwarn.show{display:block}
+  .holdwarn b{display:block;font-size:14.5px;margin-bottom:3px;color:#5a4300}
   .cta{width:100%;margin-top:8px;padding:17px;background:var(--sea);color:#fff;border:none;border-radius:12px;font-size:18px;font-weight:700;cursor:pointer;font-family:inherit}
   .cta:hover{background:var(--sea-deep)}
   .cta:disabled{background:#b8c4c5;cursor:wait}
@@ -93,7 +101,14 @@
         </div>
       </div>
 
-      <button class="cta" id="submit">I've paid and sent my screenshot ✓</button>
+      <div class="holdwarn" id="holdwarn"></div>
+
+      <label class="reflbl" for="payref">Reference number <span style="color:#d85a30">*</span></label>
+      <input class="refin" id="payref" type="text" autocomplete="off" placeholder="e.g. 0123 4567 8912">
+      <div class="refhint">Copy this from your GoTyme / GCash receipt. We match it against our bank record to confirm your booking — without it we can't verify your payment.</div>
+      <div class="referr" id="e-ref">Please enter the reference number from your payment receipt.</div>
+
+      <button class="cta" id="submit">I've paid — submit my reference ✓</button>
       <div class="err" id="formerr"></div>
 
       <div class="note">
@@ -126,19 +141,38 @@ const checkOut = qs.get('check_out') || '';
 
 function fmt(iso){ if(!iso) return ''; const [y,m,d]=iso.split('-').map(Number); return new Date(y,m-1,d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}); }
 
+const holdsAhead = parseInt(qs.get('holds') || '0', 10) || 0;
+
 document.getElementById('s-unit').textContent = UNIT_LABELS[unit] || unit || 'Your booking';
 document.getElementById('s-dates').textContent = (checkIn && checkOut) ? `${fmt(checkIn)} → ${fmt(checkOut)}` : '';
 
 const el = id => document.getElementById(id);
+const CTA_LABEL = "I've paid — submit my reference ✓";
+
+// Carried over from the calendar: other guests already have unverified payments on these
+// dates. Repeat it here, at the moment money actually leaves their hands.
+if(holdsAhead > 0){
+  el('holdwarn').innerHTML = `<b>⏳ ${holdsAhead} other ${holdsAhead===1?'guest has':'guests have'} already paid for these dates</b>
+    Whoever we verify first gets the room. If you're not the one confirmed, we refund your ₱500 in full,
+    automatically, within 24 hours — you won't need to chase us for it.`;
+  el('holdwarn').classList.add('show');
+}
 
 el('submit').onclick = async () => {
+  const payRef = el('payref').value.trim();
+  if(payRef.length < 4){
+    el('e-ref').style.display = 'block';
+    el('payref').focus();
+    return;
+  }
+  el('e-ref').style.display = 'none';
   el('submit').disabled = true;
   el('submit').textContent = 'Submitting…';
   el('formerr').style.display = 'none';
   try{
     const res = await fetch(SUBMIT_WEBHOOK, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ booking_id: bookingId, unit, check_in: checkIn, check_out: checkOut })
+      body: JSON.stringify({ booking_id: bookingId, unit, check_in: checkIn, check_out: checkOut, payment_ref: payRef })
     });
     const data = await res.json();
     if(data && (data.ok || data.success)){
@@ -148,7 +182,7 @@ el('submit').onclick = async () => {
     } else { throw new Error('bad'); }
   }catch(e){
     el('submit').disabled=false;
-    el('submit').textContent = "I've paid and sent my screenshot ✓";
+    el('submit').textContent = CTA_LABEL;
     el('formerr').textContent = 'Something went wrong. Please try again or message us on Messenger.';
     el('formerr').style.display='block';
   }

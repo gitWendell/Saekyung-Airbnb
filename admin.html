@@ -9,7 +9,7 @@
     --ink:#1b2a2f; --ink-soft:#4a5b60; --line:#e2ddd2; --paper:#f7f4ec;
     --card:#ffffff; --sea:#0e7c86; --sea-deep:#0a5860; --sel-soft:#d5ecee;
     --pending:#f4b740; --pending-soft:#fdf2d8; --confirmed:#3aa76d; --confirmed-soft:#dbf0e4;
-    --blocked:#9aa0a6; --radius:14px;
+    --blocked:#9aa0a6; --refund:#d85a30; --refund-soft:#fbe6dd; --radius:14px;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);line-height:1.6;padding:18px}
@@ -47,7 +47,17 @@
   .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em}
   .badge.pending{background:var(--pending-soft);color:#8a6516}
   .badge.confirmed{background:var(--confirmed-soft);color:#1f6b45}
+  .badge.refund{background:var(--refund-soft);color:#9c3d1c}
+  .badge.clash{background:var(--refund-soft);color:#9c3d1c}
   .review-btn{background:var(--sea);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .refund-btn{background:var(--refund);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+  .list-card.contested{border-color:var(--refund);background:#fffaf8}
+  .ref{font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;font-weight:700;letter-spacing:.02em}
+  .tabnum{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--refund);color:#fff;font-size:11px;font-weight:700}
+  .clashbox{background:var(--refund-soft);border:1px solid var(--refund);border-radius:10px;padding:12px;font-size:13px;color:#8a3618;margin:14px 0;line-height:1.5}
+  .clashbox b{display:block;margin-bottom:4px}
+  .clashbox ul{margin:6px 0 0 18px}
+  .pill.refund{background:var(--refund)}
 
   .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:18px;z-index:20}
   .modal-bg.show{display:flex}
@@ -81,18 +91,24 @@
 
   <div class="toolbar">
     <button id="tab-pending" class="active">⏳ Pending review</button>
+    <button id="tab-refunds">💸 Refunds due<span class="tabnum" id="refund-count" style="display:none">0</span></button>
     <button id="tab-cal">📅 Calendar</button>
   </div>
 
   <div class="legend">
     <div><span class="dot" style="background:var(--pending)"></span> Pending payment</div>
     <div><span class="dot" style="background:var(--confirmed)"></span> Confirmed</div>
+    <div><span class="dot" style="background:var(--refund)"></span> Refund due</div>
     <div><span class="dot" style="background:var(--blocked)"></span> Blocked</div>
   </div>
 
   <div id="pending-view">
     <div class="loading" id="pending-loading">Loading bookings…</div>
     <div id="pending-list"></div>
+  </div>
+
+  <div id="refunds-view" style="display:none">
+    <div id="refunds-list"></div>
   </div>
 
   <div id="cal-view" style="display:none">
@@ -115,6 +131,7 @@
 <script>
 const LIST_API = "https://cheff-things.app.n8n.cloud/webhook/admin-bookings";
 const CONFIRM_API = "https://cheff-things.app.n8n.cloud/webhook/admin-confirm-booking";
+const REFUND_API = "https://cheff-things.app.n8n.cloud/webhook/admin-mark-refunded";
 const UNIT_LABELS = { B301:"B301 · 16F City View", B305:"B305 · 15F Pool View" };
 
 let bookings = [];
@@ -133,21 +150,74 @@ async function load(){
     bookings = (data && data.bookings) ? data.bookings : [];
   }catch(e){ bookings = []; }
   renderPending();
+  renderRefunds();
   renderCal();
+}
+
+// Everyone else still holding an unverified payment on the same unit+dates.
+// Confirming this booking will push all of them to refund_due, so they must be visible
+// BEFORE you click confirm — that is real money you'd be committing to send back.
+function competitors(b){
+  return bookings.filter(x =>
+    x.booking_id !== b.booking_id &&
+    x.status === 'pending_payment' &&
+    (x.unit||'B301') === (b.unit||'B301') &&
+    x.check_in < b.check_out && x.check_out > b.check_in
+  );
 }
 
 function renderPending(){
   document.getElementById('pending-loading').style.display='none';
-  const pend = bookings.filter(b => b.status === 'pending_payment');
   const wrap = document.getElementById('pending-list');
+  const pend = bookings.filter(b => b.status === 'pending_payment');
   if(!pend.length){ wrap.innerHTML = '<div class="card" style="text-align:center;color:#888">No bookings waiting for confirmation right now. 🎉</div>'; return; }
-  wrap.innerHTML = pend.map(b => `
-    <div class="list-card">
+  // Contested dates first — those are the ones where dawdling costs you a refund.
+  const sorted = pend.slice().sort((a,b) => competitors(b).length - competitors(a).length);
+  wrap.innerHTML = sorted.map(b => {
+    const n = competitors(b).length;
+    return `
+    <div class="list-card ${n?'contested':''}">
       <div class="info"><b>${b.guest_name||b.fb_name||'Guest'}</b> · ${UNIT_LABELS[b.unit]||b.unit}<br>
         ${fmt(b.check_in)} → ${fmt(b.check_out)} · ${b.guests||1} guest(s)<br>
-        <span class="badge pending">Pending</span></div>
+        Ref <span class="ref">${b.payment_ref||'— none given —'}</span><br>
+        <span class="badge pending">Pending</span>
+        ${n?`<span class="badge clash">⚠️ ${n} other${n===1?'':'s'} paid for these dates</span>`:''}</div>
       <button class="review-btn" onclick="openModal('${b.booking_id}')">Review</button>
+    </div>`;
+  }).join('');
+}
+
+function renderRefunds(){
+  const due = bookings.filter(b => b.status === 'refund_due');
+  const tab = document.getElementById('refund-count');
+  tab.style.display = due.length ? 'inline-block' : 'none';
+  tab.textContent = due.length;
+  const wrap = document.getElementById('refunds-list');
+  if(!due.length){ wrap.innerHTML = '<div class="card" style="text-align:center;color:#888">Nobody is owed a refund. 🎉</div>'; return; }
+  wrap.innerHTML = `<div class="clashbox"><b>These guests paid but lost the dates.</b>
+      Send each of them ₱500 back through GoTyme, then mark it done here so it drops off the list.
+      They have already been emailed that a refund is coming.</div>` +
+    due.map(b => `
+    <div class="list-card contested">
+      <div class="info"><b>${b.guest_name||b.fb_name||'Guest'}</b> · ${UNIT_LABELS[b.unit]||b.unit}<br>
+        ${fmt(b.check_in)} → ${fmt(b.check_out)}<br>
+        Ref <span class="ref">${b.payment_ref||'— none given —'}</span> · ${b.mobile||'no mobile'}<br>
+        <span class="badge refund">Refund ₱500</span></div>
+      <button class="refund-btn" onclick="markRefunded('${b.booking_id}', this)">Mark refunded ✓</button>
     </div>`).join('');
+}
+
+async function markRefunded(id, btn){
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    const r = await fetch(REFUND_API, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ booking_id: id }) });
+    const data = await r.json();
+    if(!(data && data.ok)) throw new Error();
+    const b = bookings.find(x => x.booking_id === id);
+    if(b) b.status = 'refunded';
+    renderRefunds(); renderCal();
+  }catch(e){ btn.disabled = false; btn.textContent = 'Failed — retry'; }
 }
 
 function renderCal(){
@@ -159,7 +229,8 @@ function renderCal(){
   for(let d=1;d<=days;d++){
     const dISO=iso(new Date(y,m,d));
     const onDay = bookings.filter(b => dISO >= b.check_in && dISO < b.check_out);
-    let pills = onDay.map(b => `<div class="pill ${b.status==='confirmed'?'confirmed':b.status==='blocked'?'blocked':'pending'}" onclick="openModal('${b.booking_id}')">${(b.guest_name||b.unit||'').split(' ')[0]}</div>`).join('');
+    const cls = s => s==='confirmed'?'confirmed' : s==='blocked'?'blocked' : s==='refund_due'?'refund' : 'pending';
+    let pills = onDay.map(b => `<div class="pill ${cls(b.status)}" onclick="openModal('${b.booking_id}')">${(b.guest_name||b.unit||'').split(' ')[0]}</div>`).join('');
     html += `<div class="day"><span class="n">${d}</span><div class="mk">${pills}</div></div>`;
   }
   document.getElementById('grid').innerHTML = html;
@@ -170,10 +241,12 @@ function openModal(id){
   if(!b) return;
   activeBooking = b; selectedRole = null;
   const isConfirmed = b.status === 'confirmed';
+  const rivals = competitors(b);
   const m = document.getElementById('modal');
   m.innerHTML = `
     <h2>${b.guest_name||b.fb_name||'Guest'}</h2>
     <div class="msub">${UNIT_LABELS[b.unit]||b.unit} · Ref ${b.booking_id}</div>
+    <div class="drow"><span class="k">Payment ref</span><span class="v ref">${b.payment_ref||'— none given —'}</span></div>
     <div class="drow"><span class="k">Check-in</span><span class="v">${fmt(b.check_in)}</span></div>
     <div class="drow"><span class="k">Check-out</span><span class="v">${fmt(b.check_out)}</span></div>
     <div class="drow"><span class="k">Guests</span><span class="v">${b.guests||1}</span></div>
@@ -182,7 +255,13 @@ function openModal(id){
     <div class="drow"><span class="k">Status</span><span class="v">${b.status}</span></div>
     ${isConfirmed ? `<div class="already">✓ Already confirmed by ${b.confirmed_by||'—'}</div>
       <div class="actions"><button class="btn-cancel" onclick="closeModal()" style="flex:1">Close</button></div>`
-    : `<div class="verify">💡 Before confirming: check your GoTyme app for a ₱500 payment and match the Messenger screenshot from this guest.</div>
+    : `<div class="verify">💡 Before confirming: find <b>${b.payment_ref||'this guest\'s payment'}</b> in your GoTyme app and check it is ₱500.</div>
+      ${rivals.length ? `<div class="clashbox"><b>⚠️ Confirming this will refund ${rivals.length} other guest${rivals.length===1?'':'s'}.</b>
+        ${rivals.length===1?'This guest has':'These guests have'} also paid for the same dates. Confirming ${b.guest_name||'this guest'} will
+        mark ${rivals.length===1?'them':'them all'} refund_due and email ${rivals.length===1?'them':'them'} straight away — you'll owe
+        ₱${rivals.length*500} back in total.
+        <ul>${rivals.map(r=>`<li>${r.guest_name||r.fb_name||'Guest'} — ref <span class="ref">${r.payment_ref||'none'}</span></li>`).join('')}</ul>
+        Make sure you're confirming the payment that actually landed first.</div>` : ''}
       <div class="rolerow">Who is confirming?</div>
       <div class="roles">
         <div class="role" id="role-owner" onclick="pickRole('Owner')">👤 Owner</div>
@@ -215,8 +294,15 @@ async function confirmBooking(){
     const data = await r.json();
     if(data && data.ok){
       const b = bookings.find(x=>x.booking_id===activeBooking.booking_id);
-      if(b){ b.status='confirmed'; b.confirmed_by=selectedRole; }
-      closeModal(); renderPending(); renderCal();
+      // Mirror the cascade the backend just ran, so the Refunds tab is right without a reload.
+      if(b){
+        competitors(b).forEach(r => { r.status = 'refund_due'; });
+        b.status='confirmed'; b.confirmed_by=selectedRole;
+      }
+      closeModal(); renderPending(); renderRefunds(); renderCal();
+      if(data.refunds_due > 0){
+        alert(`Confirmed. ${data.refunds_due} other guest${data.refunds_due===1?' has':'s have'} been emailed a refund notice.\n\nYou now owe ₱${data.refunds_due*500} back — see the "Refunds due" tab.`);
+      }
     } else throw new Error();
   }catch(e){
     btn.disabled=false; btn.textContent='Confirm payment ✓';
@@ -225,18 +311,14 @@ async function confirmBooking(){
   }
 }
 
-document.getElementById('tab-pending').onclick = () => {
-  document.getElementById('tab-pending').classList.add('active');
-  document.getElementById('tab-cal').classList.remove('active');
-  document.getElementById('pending-view').style.display='block';
-  document.getElementById('cal-view').style.display='none';
-};
-document.getElementById('tab-cal').onclick = () => {
-  document.getElementById('tab-cal').classList.add('active');
-  document.getElementById('tab-pending').classList.remove('active');
-  document.getElementById('cal-view').style.display='block';
-  document.getElementById('pending-view').style.display='none';
-};
+const TABS = { pending:'pending-view', refunds:'refunds-view', cal:'cal-view' };
+function showTab(name){
+  Object.entries(TABS).forEach(([k,viewId]) => {
+    document.getElementById('tab-'+k).classList.toggle('active', k===name);
+    document.getElementById(viewId).style.display = (k===name) ? 'block' : 'none';
+  });
+}
+Object.keys(TABS).forEach(k => { document.getElementById('tab-'+k).onclick = () => showTab(k); });
 document.getElementById('prev').onclick = () => { view.setMonth(view.getMonth()-1); renderCal(); };
 document.getElementById('next').onclick = () => { view.setMonth(view.getMonth()+1); renderCal(); };
 
