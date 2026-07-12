@@ -34,12 +34,22 @@
   .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
   .day{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:4px;font-size:13px;border-radius:8px;border:1px solid transparent;position:relative}
   .day.empty{background:transparent}
+  .day.pick{cursor:pointer}
+  .day.pick:hover{border-color:var(--sea)}
+  .day.sel{background:var(--sel-soft);border-color:var(--sea)}
+  .day.selout{background:linear-gradient(135deg,var(--sel-soft) 0 46%,transparent 54% 100%);border-color:var(--sea)}
   .day .n{font-weight:500}
   .day .mk{width:100%;margin-top:2px;display:flex;flex-direction:column;gap:1px;padding:0 2px}
   .pill{font-size:8px;line-height:1.3;border-radius:3px;padding:1px 2px;color:#fff;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
   .pill.pending{background:var(--pending);color:#5a4300}
   .pill.confirmed{background:var(--confirmed)}
   .pill.blocked{background:var(--blocked)}
+
+  .units{display:flex;gap:8px;margin-bottom:12px}
+  .units button{flex:1;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600;color:var(--ink-soft)}
+  .units button.on{background:var(--sea);color:#fff;border-color:var(--sea)}
+  .hint{text-align:center;font-size:12px;color:var(--ink-soft);margin-top:12px}
+  .hint b{color:var(--ink)}
 
   .list-card{margin-bottom:10px;border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;justify-content:space-between;align-items:center;gap:12px}
   .list-card .info{font-size:14px}
@@ -69,6 +79,15 @@
   .drow .k{color:var(--ink-soft)}
   .drow .v{font-weight:600;text-align:right}
   .verify{background:var(--pending-soft);border:1px solid var(--pending);border-radius:10px;padding:12px;font-size:13px;color:#7a5a12;margin:14px 0}
+  .holdbox{background:var(--pending-soft);border:1px solid var(--pending);border-radius:10px;padding:12px;font-size:13px;color:#7a5a12;margin:14px 0;line-height:1.5}
+  .holdbox b{display:block;margin-bottom:4px}
+  .holdbox ul{margin:6px 0 0 18px}
+  .modal label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px}
+  .modal input,.modal select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit;color:var(--ink);background:#fff}
+  .modal input:focus,.modal select:focus{outline:none;border-color:var(--sea);box-shadow:0 0 0 3px var(--sel-soft)}
+  .btn-block{flex:2;background:var(--blocked);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+  .btn-block:disabled{background:#d3d6d8;cursor:not-allowed}
+  .btn-unblock{flex:2;background:var(--sea);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
   .rolerow{margin:16px 0 6px;font-size:14px;font-weight:700}
   .roles{display:flex;gap:10px;margin-bottom:8px}
   .role{flex:1;border:2px solid var(--line);border-radius:10px;padding:12px;text-align:center;cursor:pointer;font-weight:600}
@@ -113,12 +132,17 @@
 
   <div id="cal-view" style="display:none">
     <div class="card">
+      <div class="units">
+        <button id="unit-B301" class="on">B301 · 16F City View</button>
+        <button id="unit-B305">B305 · 15F Pool View</button>
+      </div>
       <div class="calhead">
         <div class="mon" id="mon">—</div>
         <div class="nav"><button id="prev">‹</button><button id="next">›</button></div>
       </div>
       <div class="dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
       <div class="grid" id="grid"></div>
+      <div class="hint" id="hint">Tap a <b>check-in</b> day, then a <b>check-out</b> day to block dates for a friend, a walk-in, or maintenance.</div>
     </div>
   </div>
 </div>
@@ -132,12 +156,19 @@
 const LIST_API = "https://cheff-things.app.n8n.cloud/webhook/admin-bookings";
 const CONFIRM_API = "https://cheff-things.app.n8n.cloud/webhook/admin-confirm-booking";
 const REFUND_API = "https://cheff-things.app.n8n.cloud/webhook/admin-mark-refunded";
+const BLOCK_API = "https://cheff-things.app.n8n.cloud/webhook/admin-block-dates";
+const UNBLOCK_API = "https://cheff-things.app.n8n.cloud/webhook/admin-unblock";
 const UNIT_LABELS = { B301:"B301 · 16F City View", B305:"B305 · 15F Pool View" };
+const REASONS = ["Personal use","Direct booking","Walk-in","Maintenance","Other"];
 
 let bookings = [];
 let view = new Date(); view.setDate(1);
 let selectedRole = null;
 let activeBooking = null;
+// Calendar tab only. calUnit decides which unit the pills — and any new block — belong to;
+// selStart/selEnd are the two taps that make a block range.
+let calUnit = "B301";
+let selStart = null, selEnd = null;
 
 // Local-parts date string. toISOString() would shift PH time (UTC+8) back a day and the
 // booking pills would land on the wrong cells.
@@ -222,32 +253,82 @@ async function markRefunded(id, btn){
   }catch(e){ btn.disabled = false; btn.textContent = 'Failed — retry'; }
 }
 
+// Half-open nights: a stay owns [check_in, check_out). Two ranges clash only when they
+// share a night, so check_out === other check_in is fine (same-day turnover).
+const overlaps = (aIn,aOut,bIn,bOut) => aIn < bOut && aOut > bIn;
+const nextDay = s => { const d = parse(s); d.setDate(d.getDate()+1); return iso(d); };
+
+// Dates that are already closed on this unit — a block on top of them would double-book.
+const blockersFor = (unit,ci,co) => bookings.filter(b =>
+  (b.unit||'B301') === unit &&
+  (b.status === 'confirmed' || b.status === 'blocked') &&
+  overlaps(ci, co, b.check_in, b.check_out));
+
+// Guests who have PAID but are not verified yet. Blocking does not touch them and does not
+// refund them — so they must be named before you commit, or someone is silently out ₱500.
+const holdsFor = (unit,ci,co) => bookings.filter(b =>
+  (b.unit||'B301') === unit &&
+  b.status === 'pending_payment' &&
+  overlaps(ci, co, b.check_in, b.check_out));
+
 function renderCal(){
   const y=view.getFullYear(), m=view.getMonth();
   document.getElementById('mon').textContent = new Date(y,m,1).toLocaleString('en-US',{month:'long',year:'numeric'});
   const start=new Date(y,m,1).getDay(), days=new Date(y,m+1,0).getDate();
+  const selOut = selEnd ? blockRange().check_out : null;
   let html='';
   for(let i=0;i<start;i++) html+='<div class="day empty"></div>';
   for(let d=1;d<=days;d++){
     const dISO=iso(new Date(y,m,d));
-    const onDay = bookings.filter(b => dISO >= b.check_in && dISO < b.check_out);
+    const onDay = bookings.filter(b => (b.unit||'B301') === calUnit && dISO >= b.check_in && dISO < b.check_out);
     const cls = s => s==='confirmed'?'confirmed' : s==='blocked'?'blocked' : s==='refund_due'?'refund' : 'pending';
-    let pills = onDay.map(b => `<div class="pill ${cls(b.status)}" onclick="openModal('${b.booking_id}')">${(b.guest_name||b.unit||'').split(' ')[0]}</div>`).join('');
-    html += `<div class="day"><span class="n">${d}</span><div class="mk">${pills}</div></div>`;
+    const pills = onDay.map(b => `<div class="pill ${cls(b.status)}" onclick="event.stopPropagation();openModal('${b.booking_id}')">${(b.guest_name||b.unit||'').split(' ')[0]}</div>`).join('');
+    let sel = '';
+    if(selStart && !selEnd && dISO === selStart) sel = ' sel';
+    else if(selStart && selEnd){
+      if(dISO >= selStart && dISO < selOut) sel = ' sel';
+      else if(dISO === selOut) sel = ' selout';
+    }
+    html += `<div class="day pick${sel}" onclick="dayTap('${dISO}')"><span class="n">${d}</span><div class="mk">${pills}</div></div>`;
   }
   document.getElementById('grid').innerHTML = html;
+  document.getElementById('hint').innerHTML = selStart && !selEnd
+    ? `Check-in <b>${fmt(selStart)}</b> — now tap the <b>check-out</b> day (or the same day again for a single night).`
+    : 'Tap a <b>check-in</b> day, then a <b>check-out</b> day to block dates for a friend, a walk-in, or maintenance.';
 }
+
+// The two taps are check-in and check-out, exactly like the guest calendar. Tapping the same
+// day twice means a single night, so check-out is the morning after.
+function blockRange(){
+  return { check_in: selStart, check_out: selEnd === selStart ? nextDay(selStart) : selEnd };
+}
+
+function dayTap(dISO){
+  if(!selStart || selEnd){ selStart = dISO; selEnd = null; renderCal(); return; }
+  if(dISO < selStart){ selStart = dISO; renderCal(); return; }  // tapped backwards — restart from there
+  selEnd = dISO;
+  renderCal();
+  openBlockModal();
+}
+function clearSel(){ selStart = null; selEnd = null; renderCal(); }
 
 function openModal(id){
   const b = bookings.find(x => x.booking_id === id);
   if(!b) return;
+  if(b.status === 'blocked'){ openBlockDetail(b); return; }
   activeBooking = b; selectedRole = null;
   const isConfirmed = b.status === 'confirmed';
   const rivals = competitors(b);
+  // You blocked these dates for yourself, yet here is a guest asking to be confirmed onto them.
+  // Confirming would double-book the unit, so say so before the button is pressed.
+  const blocks = blockersFor(b.unit||'B301', b.check_in, b.check_out).filter(x => x.status === 'blocked');
   const m = document.getElementById('modal');
   m.innerHTML = `
     <h2>${b.guest_name||b.fb_name||'Guest'}</h2>
     <div class="msub">${UNIT_LABELS[b.unit]||b.unit} · Ref ${b.booking_id}</div>
+    ${blocks.length && !isConfirmed ? `<div class="clashbox"><b>🚫 You have blocked these dates.</b>
+      ${blocks.map(x=>`${x.guest_name||'Manual block'} — ${fmt(x.check_in)} → ${fmt(x.check_out)}${x.notes?' ('+x.notes+')':''}`).join('<br>')}<br>
+      Confirming this guest would double-book the unit. Remove the block first if you'd rather host them.</div>` : ''}
     <div class="drow"><span class="k">Payment ref</span><span class="v ref">${b.payment_ref||'— none given —'}</span></div>
     <div class="drow"><span class="k">Check-in</span><span class="v">${fmt(b.check_in)}</span></div>
     <div class="drow"><span class="k">Check-out</span><span class="v">${fmt(b.check_out)}</span></div>
@@ -284,7 +365,101 @@ function pickRole(role){
   document.getElementById('confirmBtn').disabled = false;
 }
 function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); activeBooking=null; }
+// Backing out of the block modal must also drop the highlighted range, or the calendar keeps
+// showing a selection that no longer leads anywhere.
+function cancelBlock(){ closeModal(); clearSel(); }
 document.getElementById('modal-bg').addEventListener('click', e => { if(e.target.id==='modal-bg') closeModal(); });
+
+function openBlockModal(){
+  const { check_in:ci, check_out:co } = blockRange();
+  const nights = Math.round((parse(co) - parse(ci)) / 86400000);
+  const clashes = blockersFor(calUnit, ci, co);
+  const holds = holdsFor(calUnit, ci, co);
+  const m = document.getElementById('modal');
+  m.innerHTML = `
+    <h2>Block dates</h2>
+    <div class="msub">${UNIT_LABELS[calUnit]}</div>
+    <div class="drow"><span class="k">Check-in</span><span class="v">${fmt(ci)}</span></div>
+    <div class="drow"><span class="k">Check-out</span><span class="v">${fmt(co)}</span></div>
+    <div class="drow"><span class="k">Nights closed</span><span class="v">${nights}</span></div>
+    ${clashes.length ? `<div class="clashbox"><b>⚠️ These dates are already taken.</b>
+      <ul>${clashes.map(c=>`<li>${c.guest_name||c.booking_id} — ${fmt(c.check_in)} → ${fmt(c.check_out)} (${c.status})</li>`).join('')}</ul>
+      Pick dates that are actually free.</div>`
+    : `${holds.length ? `<div class="holdbox"><b>⚠️ ${holds.length} guest${holds.length===1?' has':'s have'} already paid ₱500 for these dates.</b>
+        <ul>${holds.map(h=>`<li>${h.guest_name||h.fb_name||'Guest'} — ref <span class="ref">${h.payment_ref||'none'}</span></li>`).join('')}</ul>
+        Blocking does <b>not</b> cancel or refund them — it only closes the dates to new bookings.
+        ${holds.length===1?'That guest is':'Those guests are'} still sitting in your Pending review tab, and you'd owe
+        ₱${holds.length*500} back if you block ${holds.length===1?'them':'them all'} out. Sort the money out yourself.</div>` : ''}
+      <label>Label</label>
+      <input id="blk-label" type="text" placeholder="e.g. Friend — Maria" autocomplete="off">
+      <label>Reason</label>
+      <select id="blk-reason">${REASONS.map(r=>`<option value="${r}">${r}</option>`).join('')}</select>`}
+    <div class="actions">
+      <button class="btn-cancel" onclick="cancelBlock()">Cancel</button>
+      ${clashes.length ? '' : `<button class="btn-block" id="blockBtn" onclick="submitBlock()">Block these dates 🚫</button>`}
+    </div>
+    <div class="msg" id="modal-msg"></div>`;
+  document.getElementById('modal-bg').classList.add('show');
+}
+
+async function submitBlock(){
+  const { check_in:ci, check_out:co } = blockRange();
+  const label = document.getElementById('blk-label').value.trim();
+  const reason = document.getElementById('blk-reason').value;
+  const btn = document.getElementById('blockBtn');
+  btn.disabled = true; btn.textContent = 'Blocking…';
+  try{
+    const r = await fetch(BLOCK_API, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ unit: calUnit, check_in: ci, check_out: co, label, reason }) });
+    const data = await r.json();
+    if(!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
+    bookings.push({ booking_id: data.booking_id, unit: calUnit, check_in: ci, check_out: co,
+      status: 'blocked', guest_name: data.guest_name, notes: data.notes });
+    closeModal(); clearSel(); renderCal();
+  }catch(e){
+    btn.disabled = false; btn.textContent = 'Block these dates 🚫';
+    const msg = document.getElementById('modal-msg'); msg.style.display='block';
+    msg.style.background='#fbeeee'; msg.style.color='#9a3535';
+    // The server re-checks availability, so this is usually a genuine clash someone else created.
+    msg.textContent = e.message || 'Could not block those dates. Please try again.';
+  }
+}
+
+function openBlockDetail(b){
+  activeBooking = b;
+  const m = document.getElementById('modal');
+  m.innerHTML = `
+    <h2>🚫 ${b.guest_name||'Manual block'}</h2>
+    <div class="msub">${UNIT_LABELS[b.unit]||b.unit} · Ref ${b.booking_id}</div>
+    <div class="drow"><span class="k">Check-in</span><span class="v">${fmt(b.check_in)}</span></div>
+    <div class="drow"><span class="k">Check-out</span><span class="v">${fmt(b.check_out)}</span></div>
+    <div class="drow"><span class="k">Reason</span><span class="v">${b.notes||'—'}</span></div>
+    <div class="verify">These dates are closed to guests. Removing the block opens them for booking again.</div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeModal()">Close</button>
+      <button class="btn-unblock" id="unblockBtn" onclick="unblockDates('${b.booking_id}')">Remove block ✓</button>
+    </div>
+    <div class="msg" id="modal-msg"></div>`;
+  document.getElementById('modal-bg').classList.add('show');
+}
+
+async function unblockDates(id){
+  const btn = document.getElementById('unblockBtn');
+  btn.disabled = true; btn.textContent = 'Removing…';
+  try{
+    const r = await fetch(UNBLOCK_API, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ booking_id: id }) });
+    const data = await r.json();
+    if(!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
+    bookings = bookings.filter(x => x.booking_id !== id);
+    closeModal(); renderCal();
+  }catch(e){
+    btn.disabled = false; btn.textContent = 'Remove block ✓';
+    const msg = document.getElementById('modal-msg'); msg.style.display='block';
+    msg.style.background='#fbeeee'; msg.style.color='#9a3535';
+    msg.textContent = e.message || 'Could not remove the block. Please try again.';
+  }
+}
 
 async function confirmBooking(){
   if(!activeBooking || !selectedRole) return;
@@ -321,8 +496,17 @@ function showTab(name){
   });
 }
 Object.keys(TABS).forEach(k => { document.getElementById('tab-'+k).onclick = () => showTab(k); });
-document.getElementById('prev').onclick = () => { view.setMonth(view.getMonth()-1); renderCal(); };
-document.getElementById('next').onclick = () => { view.setMonth(view.getMonth()+1); renderCal(); };
+// A half-made selection must not survive a month change or a unit switch: the range would
+// silently span months, or land on the unit you just switched away from.
+document.getElementById('prev').onclick = () => { view.setMonth(view.getMonth()-1); clearSel(); };
+document.getElementById('next').onclick = () => { view.setMonth(view.getMonth()+1); clearSel(); };
+Object.keys(UNIT_LABELS).forEach(u => {
+  document.getElementById('unit-'+u).onclick = () => {
+    calUnit = u;
+    Object.keys(UNIT_LABELS).forEach(k => document.getElementById('unit-'+k).classList.toggle('on', k===u));
+    clearSel();
+  };
+});
 
 load();
 </script>
