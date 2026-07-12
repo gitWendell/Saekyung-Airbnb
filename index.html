@@ -65,6 +65,10 @@
   .day.hold:hover{background:var(--sel-soft);border-color:var(--sea)}
   .day.hold.sel-start,.day.hold.sel-end{background:var(--sea);color:#fff}
   .day.hold.in-range{background:var(--sel-soft)}
+  /* Booked night, but free until 12nn — selectable as a check-out date only. */
+  .day.outonly{background:linear-gradient(135deg,#fff 0 46%,var(--booked) 54% 100%);color:var(--ink);cursor:pointer;border-color:var(--line)}
+  .day.outonly:hover{border-color:var(--sea);background:linear-gradient(135deg,var(--sel-soft) 0 46%,var(--booked) 54% 100%)}
+  .day.outonly.sel-end{background:var(--sea);color:#fff;font-weight:600;border-color:var(--sea)}
   .day .holdn{position:absolute;top:1px;right:3px;font-size:9px;font-weight:700;color:var(--hold-ink);line-height:1}
   .day.sel-start .holdn,.day.sel-end .holdn{color:#fff}
   .riskbox{background:var(--hold-soft);border:1px solid var(--hold);border-radius:12px;padding:13px 15px;margin-top:14px;font-size:13px;color:#6d4f10;display:none}
@@ -131,6 +135,7 @@
       <div><span class="sw" style="background:var(--sea)"></span>Selected</div>
       <div><span class="sw" style="background:#fff;border:1px solid var(--line)"></span>Available</div>
       <div><span class="sw" style="background:var(--hold-soft);border:1px solid var(--hold)"></span>On hold</div>
+      <div><span class="sw" style="background:linear-gradient(135deg,#fff 0 46%,var(--booked) 54% 100%);border:1px solid var(--line)"></span>Check-out only</div>
       <div><span class="sw" style="background:var(--booked)"></span>Booked</div>
     </div>
   </div>
@@ -145,7 +150,7 @@
   <div class="riskbox" id="risk"></div>
 
   <button class="cta" id="cta" disabled>Select your dates</button>
-  <div class="hint">Dates are only locked once we verify your payment.</div>
+  <div class="hint">Check-in 2:00 PM · Check-out 12:00 NN. Dates are only locked once we verify your payment.</div>
 
   <footer>Pay by GCash, Maya or bank transfer via GoTyme QR</footer>
 </div>
@@ -173,7 +178,10 @@ let view = new Date(); view.setDate(1);
 let selStart = null, selEnd = null;
 let gIdx = 0, gTimer = null, lbIdx = 0;
 
-const iso = d => d.toISOString().slice(0,10);
+// Build the date string from LOCAL parts. toISOString() converts to UTC first, which in
+// PH time (UTC+8) turns local midnight into the previous day — every cell would silently
+// mean the day before it.
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const todayISO = iso(new Date());
 const parse = s => { const [y,m,d]=s.split('-').map(Number); return new Date(y,m-1,d); };
 
@@ -267,29 +275,45 @@ function render(){
   for(let i=0;i<start;i++) html+=`<div class="day empty"></div>`;
   for(let d=1;d<=days;d++){
     const dISO=iso(new Date(y,m,d));
-    let cls="day", click=`data-d="${dISO}"`, badge="";
+    let cls="day", click=`data-d="${dISO}"`, badge="", tip="";
+    const night = isBooked(dISO);
+    // Check-out is 12nn and check-in is 2pm, so a booked night can still be the day an
+    // arriving guest checks OUT. Once a check-in is picked, offer those days as check-out
+    // targets — otherwise we'd throw away the sellable night before every booking.
+    const canCheckOut = night && selStart && !selEnd && dISO>selStart && !rangeHasBooked(selStart,dISO);
     if(dISO<todayISO){ cls+=" past"; click=""; }
-    else if(isBooked(dISO)){ cls+=" booked"; click=""; }
+    else if(dISO===selEnd){ cls+=(night?" outonly":" avail")+" sel-end"; }
+    else if(canCheckOut){ cls+=" outonly"; tip=' title="Check-out only — you would leave by 12nn"'; }
+    else if(night){ cls+=" booked"; click=""; }
     else{ cls+=" avail";
       const h=holdCount(dISO);
       if(h){ cls+=" hold"; badge=`<span class="holdn">${h}</span>`; }
       if(dISO===selStart) cls+=" sel-start";
-      else if(dISO===selEnd) cls+=" sel-end";
       else if(selStart&&selEnd&&dISO>selStart&&dISO<selEnd) cls+=" in-range"; }
-    html+=`<div class="${cls}" ${click}>${d}${badge}</div>`;
+    html+=`<div class="${cls}" ${click}${tip}>${d}${badge}</div>`;
   }
   html+=`</div>`;
   document.getElementById('calbody').innerHTML=html;
   const p=document.getElementById('prev'), n=document.getElementById('next');
   if(p&&canBack) p.onclick=()=>{view.setMonth(view.getMonth()-1);render();};
   if(n) n.onclick=()=>{view.setMonth(view.getMonth()+1);render();};
-  document.querySelectorAll('.day.avail[data-d]').forEach(el=> el.onclick=()=>pick(el.getAttribute('data-d')));
+  document.querySelectorAll('.day[data-d]').forEach(el=> el.onclick=()=>pick(el.getAttribute('data-d')));
 }
 function pick(dISO){
-  if(!selStart||(selStart&&selEnd)){ selStart=dISO; selEnd=null; }
-  else if(dISO<=selStart){ selStart=dISO; selEnd=null; }
-  else{ if(rangeHasBooked(selStart,dISO)){ showErr("Those dates include a booked night. Pick a range with only free nights."); selStart=dISO; selEnd=null; }
-    else { selEnd=dISO; hideErr(); } }
+  const night = isBooked(dISO);   // a booked night can be checked OUT of, never checked INTO
+  if(!selStart || selEnd){
+    if(night) return;
+    selStart=dISO; selEnd=null; hideErr();
+  }
+  else if(dISO<=selStart){
+    if(night) return;
+    selStart=dISO; selEnd=null; hideErr();
+  }
+  else if(rangeHasBooked(selStart,dISO)){
+    showErr("Those dates include a booked night. Pick a range with only free nights.");
+    selStart = night ? null : dISO; selEnd=null;
+  }
+  else { selEnd=dISO; hideErr(); }
   render(); updateSummary();
 }
 function updateSummary(){

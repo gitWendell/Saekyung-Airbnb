@@ -95,18 +95,16 @@
       <div class="step">
         <div class="num">3</div>
         <div class="step-body">
-          <div class="step-title">Screenshot your receipt and send it on Messenger</div>
-          <div class="step-hint">This is how we confirm your payment. Just send the screenshot — that's all we need.</div>
-          <a class="fb-btn" id="fb" href="https://m.me/dayanabusiness0" target="_blank">💬 Open Messenger</a>
+          <div class="step-title">Enter your reference number</div>
+          <div class="step-hint">Copy it from your GoTyme / GCash receipt. We match it against our bank record to confirm your booking — without it we can't verify your payment.</div>
+
+          <div class="holdwarn" id="holdwarn"></div>
+
+          <label class="reflbl" for="payref">Reference number <span style="color:#d85a30">*</span></label>
+          <input class="refin" id="payref" type="text" autocomplete="off" placeholder="e.g. 0123 4567 8912">
+          <div class="referr" id="e-ref">Please enter the reference number from your payment receipt.</div>
         </div>
       </div>
-
-      <div class="holdwarn" id="holdwarn"></div>
-
-      <label class="reflbl" for="payref">Reference number <span style="color:#d85a30">*</span></label>
-      <input class="refin" id="payref" type="text" autocomplete="off" placeholder="e.g. 0123 4567 8912">
-      <div class="refhint">Copy this from your GoTyme / GCash receipt. We match it against our bank record to confirm your booking — without it we can't verify your payment.</div>
-      <div class="referr" id="e-ref">Please enter the reference number from your payment receipt.</div>
 
       <button class="cta" id="submit">I've paid — submit my reference ✓</button>
       <div class="err" id="formerr"></div>
@@ -122,8 +120,8 @@
     <div class="big">✅</div>
     <h2>Thank you!</h2>
     <p>We've received your booking. We'll verify your payment and confirm shortly — you'll get a confirmation email once approved.</p>
-    <p style="margin-top:14px"><b>Haven't sent your screenshot yet?</b> Please send it on Messenger so we can confirm faster.</p>
-    <a class="fb-btn" id="fb2" href="https://m.me/dayanabusiness0" target="_blank" style="max-width:320px;margin:16px auto 0">💬 Open Messenger</a>
+    <p style="margin-top:14px"><b>One last thing:</b> send us a screenshot of your receipt on Messenger. It's the fastest way for us to confirm you.</p>
+    <a class="fb-btn" id="fb2" href="https://m.me/dayanabusiness0" target="_blank" style="max-width:320px;margin:16px auto 0">💬 Send my receipt on Messenger</a>
   </div>
 
   <footer>Saekyung Village · Direct Booking</footer>

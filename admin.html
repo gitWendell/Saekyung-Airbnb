@@ -139,7 +139,9 @@ let view = new Date(); view.setDate(1);
 let selectedRole = null;
 let activeBooking = null;
 
-const iso = d => d.toISOString().slice(0,10);
+// Local-parts date string. toISOString() would shift PH time (UTC+8) back a day and the
+// booking pills would land on the wrong cells.
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const parse = s => { const [y,m,d]=String(s).split('-').map(Number); return new Date(y,m-1,d); };
 const fmt = s => s ? parse(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
 
