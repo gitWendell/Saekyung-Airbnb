@@ -99,13 +99,36 @@
   .already{text-align:center;color:var(--confirmed);font-weight:700;padding:12px;background:var(--confirmed-soft);border-radius:10px;margin-top:14px}
   .loading{text-align:center;padding:30px;color:var(--ink-soft)}
   .msg{text-align:center;padding:10px;border-radius:8px;margin-top:10px;display:none}
+
+  .lock{position:fixed;inset:0;background:var(--paper);display:none;align-items:center;justify-content:center;padding:24px;z-index:30}
+  .lock.show{display:flex}
+  .lockbox{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:28px;max-width:340px;width:100%;text-align:center}
+  .lockbox h2{font-size:20px;margin-bottom:6px}
+  .lockbox p{color:var(--ink-soft);font-size:13px;margin-bottom:18px}
+  .lockbox input{width:100%;padding:14px;border:1px solid var(--line);border-radius:10px;font-size:22px;font-family:inherit;text-align:center;letter-spacing:.3em;color:var(--ink)}
+  .lockbox input:focus{outline:none;border-color:var(--sea);box-shadow:0 0 0 3px var(--sel-soft)}
+  .lockbox button{width:100%;margin-top:14px;padding:14px;background:var(--sea);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
+  .lockbox button:disabled{background:#b8c4c5;cursor:wait}
+  .lockerr{color:#9a3535;background:#fbeeee;border-radius:8px;padding:10px;font-size:13px;margin-top:12px;display:none}
+  .lockbtn{background:none;border:none;color:var(--ink-soft);font-size:12px;cursor:pointer;font-family:inherit;text-decoration:underline;margin-top:4px}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="lock" id="lock">
+  <div class="lockbox">
+    <h2>🔒 Admin</h2>
+    <p>Enter your passcode to manage bookings.</p>
+    <input id="pass" type="password" inputmode="numeric" autocomplete="off" placeholder="••••••">
+    <button id="lock-btn" onclick="unlock()">Unlock</button>
+    <div class="lockerr" id="lock-err"></div>
+  </div>
+</div>
+
+<div class="wrap" id="app" style="display:none">
   <header>
     <h1>Booking Confirmations</h1>
     <div class="sub">Verify payment in GoTyme + Messenger, then confirm.</div>
+    <button class="lockbtn" onclick="lock()">Lock this device</button>
   </header>
 
   <div class="toolbar">
@@ -176,9 +199,63 @@ const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-$
 const parse = s => { const [y,m,d]=String(s).split('-').map(Number); return new Date(y,m-1,d); };
 const fmt = s => s ? parse(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
 
+// ===== PASSCODE =====
+// The passcode is checked by n8n, not here — every admin webhook rejects a request without
+// the X-Admin-Key header. So it is never written into this file: it only ever lives in this
+// browser's storage after you type it. Changing the code means editing the "Check Passcode"
+// nodes in n8n, not this page.
+const KEY_NAME = 'saekyung_admin_key';
+let adminKey = localStorage.getItem(KEY_NAME) || '';
+
+async function api(url, opts){
+  const o = opts || {};
+  const r = await fetch(url, Object.assign({}, o, {
+    headers: Object.assign({}, o.headers, { 'X-Admin-Key': adminKey })
+  }));
+  // The key was cleared or changed in n8n while this tab was open — send them back to the lock
+  // screen instead of letting the page look broken.
+  if(r.status === 401){ lock('Your passcode is no longer valid. Please enter it again.'); throw new Error('Wrong passcode'); }
+  return r;
+}
+
+function lock(msg){
+  adminKey = '';
+  localStorage.removeItem(KEY_NAME);
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('lock').classList.add('show');
+  const e = document.getElementById('lock-err');
+  e.textContent = msg || ''; e.style.display = msg ? 'block' : 'none';
+  document.getElementById('pass').value = '';
+}
+
+async function unlock(){
+  const typed = document.getElementById('pass').value.trim();
+  if(!typed) return;
+  const btn = document.getElementById('lock-btn');
+  const err = document.getElementById('lock-err');
+  btn.disabled = true; btn.textContent = 'Checking…';
+  err.style.display = 'none';
+  try{
+    // The only way to know a passcode is right is to ask the server.
+    const r = await fetch(LIST_API, { headers: { 'X-Admin-Key': typed } });
+    if(r.status === 401) throw new Error('Wrong passcode. Try again.');
+    if(!r.ok) throw new Error('Could not reach the server. Try again.');
+    adminKey = typed;
+    localStorage.setItem(KEY_NAME, adminKey);
+    document.getElementById('lock').classList.remove('show');
+    document.getElementById('app').style.display = 'block';
+    load();
+  }catch(e){
+    err.textContent = e.message; err.style.display = 'block';
+  }finally{
+    btn.disabled = false; btn.textContent = 'Unlock';
+  }
+}
+document.getElementById('pass').addEventListener('keydown', e => { if(e.key === 'Enter') unlock(); });
+
 async function load(){
   try{
-    const r = await fetch(LIST_API);
+    const r = await api(LIST_API);
     const data = await r.json();
     bookings = (data && data.bookings) ? data.bookings : [];
   }catch(e){ bookings = []; }
@@ -243,7 +320,7 @@ function renderRefunds(){
 async function markRefunded(id, btn){
   btn.disabled = true; btn.textContent = 'Saving…';
   try{
-    const r = await fetch(REFUND_API, { method:'POST', headers:{'Content-Type':'application/json'},
+    const r = await api(REFUND_API, { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ booking_id: id }) });
     const data = await r.json();
     if(!(data && data.ok)) throw new Error();
@@ -409,7 +486,7 @@ async function submitBlock(){
   const btn = document.getElementById('blockBtn');
   btn.disabled = true; btn.textContent = 'Blocking…';
   try{
-    const r = await fetch(BLOCK_API, { method:'POST', headers:{'Content-Type':'application/json'},
+    const r = await api(BLOCK_API, { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ unit: calUnit, check_in: ci, check_out: co, label, reason }) });
     const data = await r.json();
     if(!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
@@ -447,7 +524,7 @@ async function unblockDates(id){
   const btn = document.getElementById('unblockBtn');
   btn.disabled = true; btn.textContent = 'Removing…';
   try{
-    const r = await fetch(UNBLOCK_API, { method:'POST', headers:{'Content-Type':'application/json'},
+    const r = await api(UNBLOCK_API, { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ booking_id: id }) });
     const data = await r.json();
     if(!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
@@ -466,7 +543,7 @@ async function confirmBooking(){
   const btn = document.getElementById('confirmBtn');
   btn.disabled = true; btn.textContent = 'Confirming…';
   try{
-    const r = await fetch(CONFIRM_API, { method:'POST', headers:{'Content-Type':'application/json'},
+    const r = await api(CONFIRM_API, { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ booking_id: activeBooking.booking_id, confirmed_by: selectedRole }) });
     const data = await r.json();
     if(data && data.ok){
@@ -508,7 +585,14 @@ Object.keys(UNIT_LABELS).forEach(u => {
   };
 });
 
-load();
+// A stored key is only a guess that it still works — load() goes through api(), so a stale or
+// revoked passcode drops straight back to the lock screen on the first request.
+if(adminKey){
+  document.getElementById('app').style.display = 'block';
+  load();
+} else {
+  lock();
+}
 </script>
 </body>
 </html>
