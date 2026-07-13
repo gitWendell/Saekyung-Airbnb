@@ -181,6 +181,7 @@
 const LIST_API = "https://cheff-things.app.n8n.cloud/webhook/admin-bookings";
 const CONFIRM_API = "https://cheff-things.app.n8n.cloud/webhook/admin-confirm-booking";
 const DECLINE_API = "https://cheff-things.app.n8n.cloud/webhook/admin-decline-booking";
+const CANCEL_API = "https://cheff-things.app.n8n.cloud/webhook/admin-cancel-booking";
 const REFUND_API = "https://cheff-things.app.n8n.cloud/webhook/admin-mark-refunded";
 const BLOCK_API = "https://cheff-things.app.n8n.cloud/webhook/admin-block-dates";
 const UNBLOCK_API = "https://cheff-things.app.n8n.cloud/webhook/admin-unblock";
@@ -417,7 +418,9 @@ function openModal(id){
     <div class="drow"><span class="k">Email</span><span class="v">${b.email||'—'}</span></div>
     <div class="drow"><span class="k">Status</span><span class="v">${b.status}</span></div>
     ${isConfirmed ? `<div class="already">✓ Already confirmed by ${b.confirmed_by||'—'}</div>
-      <div class="actions"><button class="btn-cancel" onclick="closeModal()" style="flex:1">Close</button></div>`
+      <div class="actions"><button class="btn-cancel" onclick="closeModal()" style="flex:1">Close</button></div>
+      <button class="btn-decline" id="cancelBookingBtn" onclick="cancelConfirmedBooking()">Cancel this booking ✕</button>
+      <div class="msg" id="modal-msg"></div>`
     : `<div class="verify">💡 Before confirming: find <b>${b.payment_ref||'this guest\'s payment'}</b> in your GoTyme app and check it is ₱500.</div>
       ${rivals.length ? `<div class="clashbox"><b>⚠️ Confirming this will refund ${rivals.length} other guest${rivals.length===1?'':'s'}.</b>
         ${rivals.length===1?'This guest has':'These guests have'} also paid for the same dates. Confirming ${b.guest_name||'this guest'} will
@@ -544,25 +547,46 @@ async function unblockDates(id){
 
 async function declineBooking(){
   if(!activeBooking) return;
-  if(!confirm(`Decline ${activeBooking.guest_name||activeBooking.fb_name||'this guest'}'s booking? This frees the dates for other guests and cannot be undone.`)) return;
+  if(!confirm(`Decline ${activeBooking.guest_name||activeBooking.fb_name||'this guest'}'s booking? They already paid, so this moves them to "Refunds due" — you'll owe ₱500 back. This frees the dates and cannot be undone.`)) return;
   const btn = document.getElementById('declineBtn');
   const confirmBtn = document.getElementById('confirmBtn');
   btn.disabled = true; btn.textContent = 'Declining…';
   if(confirmBtn) confirmBtn.disabled = true;
   try{
     const r = await api(DECLINE_API, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ booking_id: activeBooking.booking_id }) });
+      body: JSON.stringify({ booking_id: activeBooking.booking_id, declined_by: selectedRole || 'Admin' }) });
     const data = await r.json();
     if(!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
     const b = bookings.find(x => x.booking_id === activeBooking.booking_id);
-    if(b) b.status = 'declined';
-    closeModal(); renderPending(); renderCal();
+    if(b) b.status = 'refund_due';
+    closeModal(); renderPending(); renderRefunds(); renderCal();
   }catch(e){
     btn.disabled = false; btn.textContent = 'Decline this booking ✕';
     if(confirmBtn) confirmBtn.disabled = !selectedRole;
     const msg = document.getElementById('modal-msg'); msg.style.display='block';
     msg.style.background='#fbeeee'; msg.style.color='#9a3535';
     msg.textContent = e.message || 'Could not decline. Please try again.';
+  }
+}
+
+async function cancelConfirmedBooking(){
+  if(!activeBooking) return;
+  if(!confirm(`Cancel ${activeBooking.guest_name||activeBooking.fb_name||'this guest'}'s CONFIRMED booking? This undoes the confirmation, frees the dates, and moves them to "Refunds due" — you'll owe ₱500 back. This cannot be undone.`)) return;
+  const btn = document.getElementById('cancelBookingBtn');
+  btn.disabled = true; btn.textContent = 'Cancelling…';
+  try{
+    const r = await api(CANCEL_API, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ booking_id: activeBooking.booking_id, cancelled_by: selectedRole || 'Admin' }) });
+    const data = await r.json();
+    if(!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
+    const b = bookings.find(x => x.booking_id === activeBooking.booking_id);
+    if(b) b.status = 'refund_due';
+    closeModal(); renderPending(); renderRefunds(); renderCal();
+  }catch(e){
+    btn.disabled = false; btn.textContent = 'Cancel this booking ✕';
+    const msg = document.getElementById('modal-msg'); msg.style.display='block';
+    msg.style.background='#fbeeee'; msg.style.color='#9a3535';
+    msg.textContent = e.message || 'Could not cancel. Please try again.';
   }
 }
 
