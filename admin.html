@@ -96,6 +96,8 @@
   .btn-cancel{flex:1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;font-size:15px;cursor:pointer;font-family:inherit}
   .btn-confirm{flex:2;background:var(--confirmed);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
   .btn-confirm:disabled{background:#b8c4c5;cursor:not-allowed}
+  .btn-decline{width:100%;margin-top:10px;background:#fff;border:1px solid var(--refund);color:var(--refund);border-radius:10px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+  .btn-decline:disabled{opacity:.6;cursor:not-allowed}
   .already{text-align:center;color:var(--confirmed);font-weight:700;padding:12px;background:var(--confirmed-soft);border-radius:10px;margin-top:14px}
   .loading{text-align:center;padding:30px;color:var(--ink-soft)}
   .msg{text-align:center;padding:10px;border-radius:8px;margin-top:10px;display:none}
@@ -178,6 +180,7 @@
 <script>
 const LIST_API = "https://cheff-things.app.n8n.cloud/webhook/admin-bookings";
 const CONFIRM_API = "https://cheff-things.app.n8n.cloud/webhook/admin-confirm-booking";
+const DECLINE_API = "https://cheff-things.app.n8n.cloud/webhook/admin-decline-booking";
 const REFUND_API = "https://cheff-things.app.n8n.cloud/webhook/admin-mark-refunded";
 const BLOCK_API = "https://cheff-things.app.n8n.cloud/webhook/admin-block-dates";
 const UNBLOCK_API = "https://cheff-things.app.n8n.cloud/webhook/admin-unblock";
@@ -357,7 +360,7 @@ function renderCal(){
   for(let i=0;i<start;i++) html+='<div class="day empty"></div>';
   for(let d=1;d<=days;d++){
     const dISO=iso(new Date(y,m,d));
-    const onDay = bookings.filter(b => (b.unit||'B301') === calUnit && dISO >= b.check_in && dISO < b.check_out);
+    const onDay = bookings.filter(b => (b.unit||'B301') === calUnit && dISO >= b.check_in && dISO < b.check_out && b.status !== 'declined' && b.status !== 'refunded');
     const cls = s => s==='confirmed'?'confirmed' : s==='blocked'?'blocked' : s==='refund_due'?'refund' : 'pending';
     const pills = onDay.map(b => `<div class="pill ${cls(b.status)}" onclick="event.stopPropagation();openModal('${b.booking_id}')">${(b.guest_name||b.unit||'').split(' ')[0]}</div>`).join('');
     let sel = '';
@@ -431,6 +434,7 @@ function openModal(id){
         <button class="btn-cancel" onclick="closeModal()">Cancel</button>
         <button class="btn-confirm" id="confirmBtn" onclick="confirmBooking()" disabled>Confirm payment ✓</button>
       </div>
+      <button class="btn-decline" id="declineBtn" onclick="declineBooking()">Decline this booking ✕</button>
       <div class="msg" id="modal-msg"></div>`}
   `;
   document.getElementById('modal-bg').classList.add('show');
@@ -538,10 +542,36 @@ async function unblockDates(id){
   }
 }
 
+async function declineBooking(){
+  if(!activeBooking) return;
+  if(!confirm(`Decline ${activeBooking.guest_name||activeBooking.fb_name||'this guest'}'s booking? This frees the dates for other guests and cannot be undone.`)) return;
+  const btn = document.getElementById('declineBtn');
+  const confirmBtn = document.getElementById('confirmBtn');
+  btn.disabled = true; btn.textContent = 'Declining…';
+  if(confirmBtn) confirmBtn.disabled = true;
+  try{
+    const r = await api(DECLINE_API, { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ booking_id: activeBooking.booking_id }) });
+    const data = await r.json();
+    if(!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
+    const b = bookings.find(x => x.booking_id === activeBooking.booking_id);
+    if(b) b.status = 'declined';
+    closeModal(); renderPending(); renderCal();
+  }catch(e){
+    btn.disabled = false; btn.textContent = 'Decline this booking ✕';
+    if(confirmBtn) confirmBtn.disabled = !selectedRole;
+    const msg = document.getElementById('modal-msg'); msg.style.display='block';
+    msg.style.background='#fbeeee'; msg.style.color='#9a3535';
+    msg.textContent = e.message || 'Could not decline. Please try again.';
+  }
+}
+
 async function confirmBooking(){
   if(!activeBooking || !selectedRole) return;
   const btn = document.getElementById('confirmBtn');
+  const declineBtn = document.getElementById('declineBtn');
   btn.disabled = true; btn.textContent = 'Confirming…';
+  if(declineBtn) declineBtn.disabled = true;
   try{
     const r = await api(CONFIRM_API, { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ booking_id: activeBooking.booking_id, confirmed_by: selectedRole }) });
@@ -560,6 +590,7 @@ async function confirmBooking(){
     } else throw new Error();
   }catch(e){
     btn.disabled=false; btn.textContent='Confirm payment ✓';
+    if(declineBtn) declineBtn.disabled = false;
     const msg=document.getElementById('modal-msg'); msg.style.display='block'; msg.style.background='#fbeeee'; msg.style.color='#9a3535';
     msg.textContent='Something went wrong. Please try again.';
   }
