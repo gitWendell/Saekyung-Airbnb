@@ -82,11 +82,20 @@
 
 <script>
 // ===== CONFIG =====
-const SUBMIT_WEBHOOK = "https://cheff-things.app.n8n.cloud/webhook/airbnb-book";
-const AVAILABILITY_API = "https://cheff-things.app.n8n.cloud/webhook/availability";
+// The anon key is public by design — row level security decides what it can reach, and
+// here that is two functions that return dates and the caller's own booking id.
+const SUPABASE_URL = "https://rbcqeuygpevabqwtdgva.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiY3FldXlncGV2YWJxd3RkZ3ZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5Njk2OTQsImV4cCI6MjEwMDU0NTY5NH0.X9qiG3XjGHzT-O5b8lO0DeJKzzJu_ocMr4LAh3-0WLA";
 const CALENDAR_URL = "https://gitwendell.github.io/Saekyung-Airbnb/";
 const UNIT_LABELS = { B301: "B301 · 16F City View", B305: "B305 · 15F Pool View" };
 // ==================
+
+const rpc = (fn, body) => fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+  method: 'POST',
+  headers: {'Content-Type':'application/json', 'Accept':'application/json',
+            'apikey':SUPABASE_ANON_KEY, 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`},
+  body: JSON.stringify(body || {})
+});
 
 const qs = new URLSearchParams(location.search);
 const unit = qs.get('unit') || '';
@@ -121,7 +130,7 @@ let ctaLabel = 'Reserve my dates';
 async function loadHolds(){
   if(!(unit && checkIn && checkOut)) return;
   try{
-    const r = await fetch(AVAILABILITY_API, {headers:{'Accept':'application/json'}});
+    const r = await rpc('get_availability');
     const data = await r.json();
     const list = (data && data.holds && data.holds[unit]) || [];
     const n = list.filter(h => h.check_in < checkOut && h.check_out > checkIn).length;
@@ -158,10 +167,9 @@ el('submit').onclick = async () => {
   el('formerr').style.display = 'none';
 
   try{
-    const res = await fetch(SUBMIT_WEBHOOK, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ unit, check_in: checkIn, check_out: checkOut, fb_name: fb, email, mobile, guests })
+    const res = await rpc('create_booking', {
+      p_unit: unit, p_check_in: checkIn, p_check_out: checkOut,
+      p_fb_name: fb, p_email: email, p_mobile: mobile, p_guests: guests
     });
     const data = await res.json();
     if(data && data.qr_url){

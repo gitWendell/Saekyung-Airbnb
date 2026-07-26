@@ -176,11 +176,10 @@
 </div>
 
 <script>
-const LIST_API = "https://cheff-things.app.n8n.cloud/webhook/admin-bookings";
-const CONFIRM_API = "https://cheff-things.app.n8n.cloud/webhook/admin-confirm-booking";
-const REFUND_API = "https://cheff-things.app.n8n.cloud/webhook/admin-mark-refunded";
-const BLOCK_API = "https://cheff-things.app.n8n.cloud/webhook/admin-block-dates";
-const UNBLOCK_API = "https://cheff-things.app.n8n.cloud/webhook/admin-unblock";
+const SUPABASE_URL = "https://rbcqeuygpevabqwtdgva.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiY3FldXlncGV2YWJxd3RkZ3ZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5Njk2OTQsImV4cCI6MjEwMDU0NTY5NH0.X9qiG3XjGHzT-O5b8lO0DeJKzzJu_ocMr4LAh3-0WLA";
+// The single admin account created in Supabase Auth. The passcode below is its password.
+const ADMIN_EMAIL = "info@maidsruscleaning.com.au";
 const UNIT_LABELS = { B301:"B301 · 16F City View", B305:"B305 · 15F Pool View" };
 const REASONS = ["Personal use","Direct booking","Walk-in","Maintenance","Other"];
 
@@ -200,27 +199,60 @@ const parse = s => { const [y,m,d]=String(s).split('-').map(Number); return new 
 const fmt = s => s ? parse(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
 
 // ===== PASSCODE =====
-// The passcode is checked by n8n, not here — every admin webhook rejects a request without
-// the X-Admin-Key header. So it is never written into this file: it only ever lives in this
-// browser's storage after you type it. Changing the code means editing the "Check Passcode"
-// nodes in n8n, not this page.
-const KEY_NAME = 'saekyung_admin_key';
-let adminKey = localStorage.getItem(KEY_NAME) || '';
+// The passcode is the password of the single Supabase Auth admin account, so it is checked
+// by Supabase and never written into this file — it only ever lives in this browser after
+// you type it. What is stored here afterwards is a session token, not the passcode itself,
+// and it expires on its own. Every admin function refuses a request without a valid one, and
+// the bookings table is unreadable without it, so guest names and numbers stay private.
+// Changing the code means changing that account's password in the Supabase dashboard.
+const SESSION_NAME = 'saekyung_admin_session';
+let session = JSON.parse(localStorage.getItem(SESSION_NAME) || 'null');
 
-async function api(url, opts){
-  const o = opts || {};
-  const r = await fetch(url, Object.assign({}, o, {
-    headers: Object.assign({}, o.headers, { 'X-Admin-Key': adminKey })
-  }));
-  // The key was cleared or changed in n8n while this tab was open — send them back to the lock
-  // screen instead of letting the page look broken.
-  if(r.status === 401){ lock('Your passcode is no longer valid. Please enter it again.'); throw new Error('Wrong passcode'); }
+function saveSession(s){
+  session = s;
+  localStorage.setItem(SESSION_NAME, JSON.stringify(s));
+}
+
+// Access tokens last about an hour, which is shorter than a session spent working through
+// pending bookings. Trade the refresh token for a new one rather than making them re-type.
+async function refreshSession(){
+  if(!session || !session.refresh_token) return false;
+  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
+    body: JSON.stringify({ refresh_token: session.refresh_token })
+  });
+  if(!r.ok) return false;
+  saveSession(await r.json());
+  return true;
+}
+
+async function call(path, body, retried){
+  const r = await fetch(`${SUPABASE_URL}${path}`, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: {
+      'Content-Type':'application/json', 'Accept':'application/json',
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${session ? session.access_token : SUPABASE_ANON_KEY}`
+    },
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+  if(r.status === 401 || r.status === 403){
+    // Expired mid-session: refresh once and replay. Only if that fails is the session
+    // genuinely dead and worth sending them back to the lock screen for.
+    if(!retried && await refreshSession()) return call(path, body, true);
+    lock('Your session has expired. Please enter the passcode again.');
+    throw new Error('Not signed in');
+  }
   return r;
 }
 
+// PostgREST returns the function's jsonb result directly.
+const rpc = (fn, args) => call(`/rest/v1/rpc/${fn}`, args || {}).then(r => r.json());
+
 function lock(msg){
-  adminKey = '';
-  localStorage.removeItem(KEY_NAME);
+  session = null;
+  localStorage.removeItem(SESSION_NAME);
   document.getElementById('app').style.display = 'none';
   document.getElementById('lock').classList.add('show');
   const e = document.getElementById('lock-err');
@@ -236,12 +268,14 @@ async function unlock(){
   btn.disabled = true; btn.textContent = 'Checking…';
   err.style.display = 'none';
   try{
-    // The only way to know a passcode is right is to ask the server.
-    const r = await fetch(LIST_API, { headers: { 'X-Admin-Key': typed } });
-    if(r.status === 401) throw new Error('Wrong passcode. Try again.');
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
+      body: JSON.stringify({ email: ADMIN_EMAIL, password: typed })
+    });
+    if(r.status === 400 || r.status === 401) throw new Error('Wrong passcode. Try again.');
     if(!r.ok) throw new Error('Could not reach the server. Try again.');
-    adminKey = typed;
-    localStorage.setItem(KEY_NAME, adminKey);
+    saveSession(await r.json());
     document.getElementById('lock').classList.remove('show');
     document.getElementById('app').style.display = 'block';
     load();
@@ -255,9 +289,13 @@ document.getElementById('pass').addEventListener('keydown', e => { if(e.key === 
 
 async function load(){
   try{
-    const r = await api(LIST_API);
-    const data = await r.json();
-    bookings = (data && data.bookings) ? data.bookings : [];
+    // awaiting_payment is left out on purpose: those guests filled the form and never sent
+    // money, so they hold nothing, are owed nothing, and would only clutter the calendar.
+    const r = await call('/rest/v1/bookings' +
+      '?select=*&status=in.(pending_payment,confirmed,refund_due,refunded,blocked)' +
+      '&order=check_in.asc');
+    bookings = await r.json();
+    if(!Array.isArray(bookings)) bookings = [];
   }catch(e){ bookings = []; }
   renderPending();
   renderRefunds();
@@ -320,9 +358,7 @@ function renderRefunds(){
 async function markRefunded(id, btn){
   btn.disabled = true; btn.textContent = 'Saving…';
   try{
-    const r = await api(REFUND_API, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ booking_id: id }) });
-    const data = await r.json();
+    const data = await rpc('mark_refunded', { p_booking_id: id });
     if(!(data && data.ok)) throw new Error();
     const b = bookings.find(x => x.booking_id === id);
     if(b) b.status = 'refunded';
@@ -486,9 +522,8 @@ async function submitBlock(){
   const btn = document.getElementById('blockBtn');
   btn.disabled = true; btn.textContent = 'Blocking…';
   try{
-    const r = await api(BLOCK_API, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ unit: calUnit, check_in: ci, check_out: co, label, reason }) });
-    const data = await r.json();
+    const data = await rpc('block_dates', {
+      p_unit: calUnit, p_check_in: ci, p_check_out: co, p_label: label, p_reason: reason });
     if(!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
     bookings.push({ booking_id: data.booking_id, unit: calUnit, check_in: ci, check_out: co,
       status: 'blocked', guest_name: data.guest_name, notes: data.notes });
@@ -524,9 +559,7 @@ async function unblockDates(id){
   const btn = document.getElementById('unblockBtn');
   btn.disabled = true; btn.textContent = 'Removing…';
   try{
-    const r = await api(UNBLOCK_API, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ booking_id: id }) });
-    const data = await r.json();
+    const data = await rpc('unblock', { p_booking_id: id });
     if(!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
     bookings = bookings.filter(x => x.booking_id !== id);
     closeModal(); renderCal();
@@ -543,9 +576,8 @@ async function confirmBooking(){
   const btn = document.getElementById('confirmBtn');
   btn.disabled = true; btn.textContent = 'Confirming…';
   try{
-    const r = await api(CONFIRM_API, { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ booking_id: activeBooking.booking_id, confirmed_by: selectedRole }) });
-    const data = await r.json();
+    const data = await rpc('confirm_booking', {
+      p_booking_id: activeBooking.booking_id, p_confirmed_by: selectedRole });
     if(data && data.ok){
       const b = bookings.find(x=>x.booking_id===activeBooking.booking_id);
       // Mirror the cascade the backend just ran, so the Refunds tab is right without a reload.
@@ -585,9 +617,9 @@ Object.keys(UNIT_LABELS).forEach(u => {
   };
 });
 
-// A stored key is only a guess that it still works — load() goes through api(), so a stale or
-// revoked passcode drops straight back to the lock screen on the first request.
-if(adminKey){
+// A stored session is only a guess that it still works — load() goes through call(), which
+// refreshes an expired token once and drops to the lock screen if the session is really dead.
+if(session && session.refresh_token){
   document.getElementById('app').style.display = 'block';
   load();
 } else {

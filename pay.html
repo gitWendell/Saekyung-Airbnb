@@ -128,7 +128,8 @@
 </div>
 
 <script>
-const SUBMIT_WEBHOOK = "https://cheff-things.app.n8n.cloud/webhook/airbnb-paid";
+const SUPABASE_URL = "https://rbcqeuygpevabqwtdgva.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiY3FldXlncGV2YWJxd3RkZ3ZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5Njk2OTQsImV4cCI6MjEwMDU0NTY5NH0.X9qiG3XjGHzT-O5b8lO0DeJKzzJu_ocMr4LAh3-0WLA";
 const UNIT_LABELS = { B301: "B301 · 16F City View", B305: "B305 · 15F Pool View" };
 
 const qs = new URLSearchParams(location.search);
@@ -168,9 +169,13 @@ el('submit').onclick = async () => {
   el('submit').textContent = 'Submitting…';
   el('formerr').style.display = 'none';
   try{
-    const res = await fetch(SUBMIT_WEBHOOK, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ booking_id: bookingId, unit, check_in: checkIn, check_out: checkOut, payment_ref: payRef })
+    // The unit and dates are no longer sent: they are already on the booking row, and
+    // trusting them from the query string would let anyone edit someone else's stay.
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/submit_payment`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'Accept':'application/json',
+               'apikey':SUPABASE_ANON_KEY, 'Authorization':`Bearer ${SUPABASE_ANON_KEY}`},
+      body: JSON.stringify({ p_booking_id: bookingId, p_payment_ref: payRef })
     });
     const data = await res.json();
     if(data && (data.ok || data.success)){
