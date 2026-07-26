@@ -1,462 +1,1091 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin — Confirm Bookings</title>
-<style>
-  :root{
-    --ink:#1b2a2f; --ink-soft:#4a5b60; --line:#e2ddd2; --paper:#f7f4ec;
-    --card:#ffffff; --sea:#0e7c86; --sea-deep:#0a5860; --sel-soft:#d5ecee;
-    --pending:#f4b740; --pending-soft:#fdf2d8; --confirmed:#3aa76d; --confirmed-soft:#dbf0e4;
-    --blocked:#9aa0a6; --refund:#d85a30; --refund-soft:#fbe6dd; --radius:14px;
-  }
-  *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--paper);color:var(--ink);line-height:1.6;padding:18px}
-  .wrap{max-width:720px;margin:0 auto}
-  header{text-align:center;padding:8px 0 16px}
-  h1{font-size:22px;font-weight:700}
-  .sub{color:var(--ink-soft);font-size:14px}
-  .toolbar{display:flex;gap:10px;justify-content:center;margin-bottom:16px;flex-wrap:wrap}
-  .toolbar button{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 14px;font-size:14px;cursor:pointer;font-family:inherit}
-  .toolbar button.active{background:var(--sea);color:#fff;border-color:var(--sea)}
-  .legend{display:flex;gap:14px;justify-content:center;margin-bottom:16px;flex-wrap:wrap;font-size:13px;color:var(--ink-soft)}
-  .legend div{display:flex;align-items:center;gap:6px}
-  .dot{width:12px;height:12px;border-radius:3px}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin — Confirm Bookings</title>
+  <style>
+    :root {
+      --ink: #1b2a2f;
+      --ink-soft: #4a5b60;
+      --line: #e2ddd2;
+      --paper: #f7f4ec;
+      --card: #ffffff;
+      --sea: #0e7c86;
+      --sea-deep: #0a5860;
+      --sel-soft: #d5ecee;
+      --pending: #f4b740;
+      --pending-soft: #fdf2d8;
+      --confirmed: #3aa76d;
+      --confirmed-soft: #dbf0e4;
+      --blocked: #9aa0a6;
+      --refund: #d85a30;
+      --refund-soft: #fbe6dd;
+      --radius: 14px;
+    }
 
-  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;margin-bottom:16px}
-  .calhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-  .calhead .mon{font-size:16px;font-weight:700}
-  .nav{display:flex;gap:6px}
-  .nav button{width:34px;height:34px;border:1px solid var(--line);background:var(--card);border-radius:8px;cursor:pointer;font-size:16px}
-  .dow{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:4px}
-  .dow span{text-align:center;font-size:11px;font-weight:600;color:var(--ink-soft)}
-  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
-  .day{aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:4px;font-size:13px;border-radius:8px;border:1px solid transparent;position:relative}
-  .day.empty{background:transparent}
-  .day.pick{cursor:pointer}
-  .day.pick:hover{border-color:var(--sea)}
-  .day.sel{background:var(--sel-soft);border-color:var(--sea)}
-  .day.selout{background:linear-gradient(135deg,var(--sel-soft) 0 46%,transparent 54% 100%);border-color:var(--sea)}
-  .day .n{font-weight:500}
-  .day .mk{width:100%;margin-top:2px;display:flex;flex-direction:column;gap:1px;padding:0 2px}
-  .pill{font-size:8px;line-height:1.3;border-radius:3px;padding:1px 2px;color:#fff;cursor:pointer;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
-  .pill.pending{background:var(--pending);color:#5a4300}
-  .pill.confirmed{background:var(--confirmed)}
-  .pill.blocked{background:var(--blocked)}
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
 
-  .units{display:flex;gap:8px;margin-bottom:12px}
-  .units button{flex:1;border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px;font-size:13px;cursor:pointer;font-family:inherit;font-weight:600;color:var(--ink-soft)}
-  .units button.on{background:var(--sea);color:#fff;border-color:var(--sea)}
-  .hint{text-align:center;font-size:12px;color:var(--ink-soft);margin-top:12px}
-  .hint b{color:var(--ink)}
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+      line-height: 1.6;
+      padding: 18px
+    }
 
-  .list-card{margin-bottom:10px;border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;justify-content:space-between;align-items:center;gap:12px}
-  .list-card .info{font-size:14px}
-  .list-card .info b{font-size:15px}
-  .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;text-transform:uppercase;letter-spacing:.04em}
-  .badge.pending{background:var(--pending-soft);color:#8a6516}
-  .badge.confirmed{background:var(--confirmed-soft);color:#1f6b45}
-  .badge.refund{background:var(--refund-soft);color:#9c3d1c}
-  .badge.clash{background:var(--refund-soft);color:#9c3d1c}
-  .review-btn{background:var(--sea);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
-  .refund-btn{background:var(--refund);color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
-  .list-card.contested{border-color:var(--refund);background:#fffaf8}
-  .ref{font-family:ui-monospace,'Cascadia Mono',Consolas,monospace;font-weight:700;letter-spacing:.02em}
-  .tabnum{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--refund);color:#fff;font-size:11px;font-weight:700}
-  .clashbox{background:var(--refund-soft);border:1px solid var(--refund);border-radius:10px;padding:12px;font-size:13px;color:#8a3618;margin:14px 0;line-height:1.5}
-  .clashbox b{display:block;margin-bottom:4px}
-  .clashbox ul{margin:6px 0 0 18px}
-  .pill.refund{background:var(--refund)}
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto
+    }
 
-  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:18px;z-index:20}
-  .modal-bg.show{display:flex}
-  .modal{background:#fff;border-radius:16px;padding:24px;max-width:440px;width:100%;max-height:90vh;overflow-y:auto}
-  .modal h2{font-size:19px;margin-bottom:4px}
-  .modal .msub{color:var(--ink-soft);font-size:13px;margin-bottom:16px}
-  .drow{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f0ece2;font-size:14px}
-  .drow:last-of-type{border-bottom:none}
-  .drow .k{color:var(--ink-soft)}
-  .drow .v{font-weight:600;text-align:right}
-  .verify{background:var(--pending-soft);border:1px solid var(--pending);border-radius:10px;padding:12px;font-size:13px;color:#7a5a12;margin:14px 0}
-  .holdbox{background:var(--pending-soft);border:1px solid var(--pending);border-radius:10px;padding:12px;font-size:13px;color:#7a5a12;margin:14px 0;line-height:1.5}
-  .holdbox b{display:block;margin-bottom:4px}
-  .holdbox ul{margin:6px 0 0 18px}
-  .modal label{display:block;font-size:13px;font-weight:700;margin:14px 0 6px}
-  .modal input,.modal select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;font-size:14px;font-family:inherit;color:var(--ink);background:#fff}
-  .modal input:focus,.modal select:focus{outline:none;border-color:var(--sea);box-shadow:0 0 0 3px var(--sel-soft)}
-  .btn-block{flex:2;background:var(--blocked);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
-  .btn-block:disabled{background:#d3d6d8;cursor:not-allowed}
-  .btn-unblock{flex:2;background:var(--sea);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
-  .rolerow{margin:16px 0 6px;font-size:14px;font-weight:700}
-  .roles{display:flex;gap:10px;margin-bottom:8px}
-  .role{flex:1;border:2px solid var(--line);border-radius:10px;padding:12px;text-align:center;cursor:pointer;font-weight:600}
-  .role.sel{border-color:var(--sea);background:var(--sel-soft);color:var(--sea-deep)}
-  .modal .actions{display:flex;gap:10px;margin-top:18px}
-  .btn-cancel{flex:1;background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px;font-size:15px;cursor:pointer;font-family:inherit}
-  .btn-confirm{flex:2;background:var(--confirmed);color:#fff;border:none;border-radius:10px;padding:14px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
-  .btn-confirm:disabled{background:#b8c4c5;cursor:not-allowed}
-  .already{text-align:center;color:var(--confirmed);font-weight:700;padding:12px;background:var(--confirmed-soft);border-radius:10px;margin-top:14px}
-  .loading{text-align:center;padding:30px;color:var(--ink-soft)}
-  .msg{text-align:center;padding:10px;border-radius:8px;margin-top:10px;display:none}
+    header {
+      text-align: center;
+      padding: 8px 0 16px
+    }
 
-  .lock{position:fixed;inset:0;background:var(--paper);display:none;align-items:center;justify-content:center;padding:24px;z-index:30}
-  .lock.show{display:flex}
-  .lockbox{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:28px;max-width:340px;width:100%;text-align:center}
-  .lockbox h2{font-size:20px;margin-bottom:6px}
-  .lockbox p{color:var(--ink-soft);font-size:13px;margin-bottom:18px}
-  .lockbox input{width:100%;padding:14px;border:1px solid var(--line);border-radius:10px;font-size:22px;font-family:inherit;text-align:center;letter-spacing:.3em;color:var(--ink)}
-  .lockbox input:focus{outline:none;border-color:var(--sea);box-shadow:0 0 0 3px var(--sel-soft)}
-  .lockbox button{width:100%;margin-top:14px;padding:14px;background:var(--sea);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit}
-  .lockbox button:disabled{background:#b8c4c5;cursor:wait}
-  .lockerr{color:#9a3535;background:#fbeeee;border-radius:8px;padding:10px;font-size:13px;margin-top:12px;display:none}
-  .lockbtn{background:none;border:none;color:var(--ink-soft);font-size:12px;cursor:pointer;font-family:inherit;text-decoration:underline;margin-top:4px}
-</style>
+    h1 {
+      font-size: 22px;
+      font-weight: 700
+    }
+
+    .sub {
+      color: var(--ink-soft);
+      font-size: 14px
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap
+    }
+
+    .toolbar button {
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 10px;
+      padding: 8px 14px;
+      font-size: 14px;
+      cursor: pointer;
+      font-family: inherit
+    }
+
+    .toolbar button.active {
+      background: var(--sea);
+      color: #fff;
+      border-color: var(--sea)
+    }
+
+    .legend {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      font-size: 13px;
+      color: var(--ink-soft)
+    }
+
+    .legend div {
+      display: flex;
+      align-items: center;
+      gap: 6px
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px;
+      margin-bottom: 16px
+    }
+
+    .calhead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px
+    }
+
+    .calhead .mon {
+      font-size: 16px;
+      font-weight: 700
+    }
+
+    .nav {
+      display: flex;
+      gap: 6px
+    }
+
+    .nav button {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 16px
+    }
+
+    .dow {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 3px;
+      margin-bottom: 4px
+    }
+
+    .dow span {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--ink-soft)
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 3px
+    }
+
+    .day {
+      aspect-ratio: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding-top: 4px;
+      font-size: 13px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      position: relative
+    }
+
+    .day.empty {
+      background: transparent
+    }
+
+    .day.pick {
+      cursor: pointer
+    }
+
+    .day.pick:hover {
+      border-color: var(--sea)
+    }
+
+    .day.sel {
+      background: var(--sel-soft);
+      border-color: var(--sea)
+    }
+
+    .day.selout {
+      background: linear-gradient(135deg, var(--sel-soft) 0 46%, transparent 54% 100%);
+      border-color: var(--sea)
+    }
+
+    .day .n {
+      font-weight: 500
+    }
+
+    .day .mk {
+      width: 100%;
+      margin-top: 2px;
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      padding: 0 2px
+    }
+
+    .pill {
+      font-size: 8px;
+      line-height: 1.3;
+      border-radius: 3px;
+      padding: 1px 2px;
+      color: #fff;
+      cursor: pointer;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis
+    }
+
+    .pill.pending {
+      background: var(--pending);
+      color: #5a4300
+    }
+
+    .pill.confirmed {
+      background: var(--confirmed)
+    }
+
+    .pill.blocked {
+      background: var(--blocked)
+    }
+
+    .units {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px
+    }
+
+    .units button {
+      flex: 1;
+      border: 1px solid var(--line);
+      background: var(--card);
+      border-radius: 10px;
+      padding: 8px;
+      font-size: 13px;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: 600;
+      color: var(--ink-soft)
+    }
+
+    .units button.on {
+      background: var(--sea);
+      color: #fff;
+      border-color: var(--sea)
+    }
+
+    .hint {
+      text-align: center;
+      font-size: 12px;
+      color: var(--ink-soft);
+      margin-top: 12px
+    }
+
+    .hint b {
+      color: var(--ink)
+    }
+
+    .list-card {
+      margin-bottom: 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px
+    }
+
+    .list-card .info {
+      font-size: 14px
+    }
+
+    .list-card .info b {
+      font-size: 15px
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 9px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: .04em
+    }
+
+    .badge.pending {
+      background: var(--pending-soft);
+      color: #8a6516
+    }
+
+    .badge.confirmed {
+      background: var(--confirmed-soft);
+      color: #1f6b45
+    }
+
+    .badge.refund {
+      background: var(--refund-soft);
+      color: #9c3d1c
+    }
+
+    .badge.clash {
+      background: var(--refund-soft);
+      color: #9c3d1c
+    }
+
+    .review-btn {
+      background: var(--sea);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap
+    }
+
+    .refund-btn {
+      background: var(--refund);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap
+    }
+
+    .list-card.contested {
+      border-color: var(--refund);
+      background: #fffaf8
+    }
+
+    .ref {
+      font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+      font-weight: 700;
+      letter-spacing: .02em
+    }
+
+    .tabnum {
+      display: inline-block;
+      min-width: 18px;
+      padding: 0 5px;
+      margin-left: 5px;
+      border-radius: 9px;
+      background: var(--refund);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 700
+    }
+
+    .clashbox {
+      background: var(--refund-soft);
+      border: 1px solid var(--refund);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 13px;
+      color: #8a3618;
+      margin: 14px 0;
+      line-height: 1.5
+    }
+
+    .clashbox b {
+      display: block;
+      margin-bottom: 4px
+    }
+
+    .clashbox ul {
+      margin: 6px 0 0 18px
+    }
+
+    .pill.refund {
+      background: var(--refund)
+    }
+
+    .modal-bg {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 20
+    }
+
+    .modal-bg.show {
+      display: flex
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      max-width: 440px;
+      width: 100%;
+      max-height: 90vh;
+      overflow-y: auto
+    }
+
+    .modal h2 {
+      font-size: 19px;
+      margin-bottom: 4px
+    }
+
+    .modal .msub {
+      color: var(--ink-soft);
+      font-size: 13px;
+      margin-bottom: 16px
+    }
+
+    .drow {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0ece2;
+      font-size: 14px
+    }
+
+    .drow:last-of-type {
+      border-bottom: none
+    }
+
+    .drow .k {
+      color: var(--ink-soft)
+    }
+
+    .drow .v {
+      font-weight: 600;
+      text-align: right
+    }
+
+    .verify {
+      background: var(--pending-soft);
+      border: 1px solid var(--pending);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 13px;
+      color: #7a5a12;
+      margin: 14px 0
+    }
+
+    .holdbox {
+      background: var(--pending-soft);
+      border: 1px solid var(--pending);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 13px;
+      color: #7a5a12;
+      margin: 14px 0;
+      line-height: 1.5
+    }
+
+    .holdbox b {
+      display: block;
+      margin-bottom: 4px
+    }
+
+    .holdbox ul {
+      margin: 6px 0 0 18px
+    }
+
+    .modal label {
+      display: block;
+      font-size: 13px;
+      font-weight: 700;
+      margin: 14px 0 6px
+    }
+
+    .modal input,
+    .modal select {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--ink);
+      background: #fff
+    }
+
+    .modal input:focus,
+    .modal select:focus {
+      outline: none;
+      border-color: var(--sea);
+      box-shadow: 0 0 0 3px var(--sel-soft)
+    }
+
+    .btn-block {
+      flex: 2;
+      background: var(--blocked);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit
+    }
+
+    .btn-block:disabled {
+      background: #d3d6d8;
+      cursor: not-allowed
+    }
+
+    .btn-unblock {
+      flex: 2;
+      background: var(--sea);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit
+    }
+
+    .rolerow {
+      margin: 16px 0 6px;
+      font-size: 14px;
+      font-weight: 700
+    }
+
+    .roles {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 8px
+    }
+
+    .role {
+      flex: 1;
+      border: 2px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      text-align: center;
+      cursor: pointer;
+      font-weight: 600
+    }
+
+    .role.sel {
+      border-color: var(--sea);
+      background: var(--sel-soft);
+      color: var(--sea-deep)
+    }
+
+    .modal .actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px
+    }
+
+    .btn-cancel {
+      flex: 1;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 15px;
+      cursor: pointer;
+      font-family: inherit
+    }
+
+    .btn-confirm {
+      flex: 2;
+      background: var(--confirmed);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit
+    }
+
+    .btn-confirm:disabled {
+      background: #b8c4c5;
+      cursor: not-allowed
+    }
+
+    .btn-decline {
+      width: 100%;
+      margin-top: 10px;
+      background: #fff;
+      border: 1px solid var(--refund);
+      color: var(--refund);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit
+    }
+
+    .btn-decline:disabled {
+      opacity: .6;
+      cursor: not-allowed
+    }
+
+    .already {
+      text-align: center;
+      color: var(--confirmed);
+      font-weight: 700;
+      padding: 12px;
+      background: var(--confirmed-soft);
+      border-radius: 10px;
+      margin-top: 14px
+    }
+
+    .loading {
+      text-align: center;
+      padding: 30px;
+      color: var(--ink-soft)
+    }
+
+    .msg {
+      text-align: center;
+      padding: 10px;
+      border-radius: 8px;
+      margin-top: 10px;
+      display: none
+    }
+
+    .lock {
+      position: fixed;
+      inset: 0;
+      background: var(--paper);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 30
+    }
+
+    .lock.show {
+      display: flex
+    }
+
+    .lockbox {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 28px;
+      max-width: 340px;
+      width: 100%;
+      text-align: center
+    }
+
+    .lockbox h2 {
+      font-size: 20px;
+      margin-bottom: 6px
+    }
+
+    .lockbox p {
+      color: var(--ink-soft);
+      font-size: 13px;
+      margin-bottom: 18px
+    }
+
+    .lockbox input {
+      width: 100%;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font-size: 22px;
+      font-family: inherit;
+      text-align: center;
+      letter-spacing: .3em;
+      color: var(--ink)
+    }
+
+    .lockbox input:focus {
+      outline: none;
+      border-color: var(--sea);
+      box-shadow: 0 0 0 3px var(--sel-soft)
+    }
+
+    .lockbox button {
+      width: 100%;
+      margin-top: 14px;
+      padding: 14px;
+      background: var(--sea);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit
+    }
+
+    .lockbox button:disabled {
+      background: #b8c4c5;
+      cursor: wait
+    }
+
+    .lockerr {
+      color: #9a3535;
+      background: #fbeeee;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 13px;
+      margin-top: 12px;
+      display: none
+    }
+
+    .lockbtn {
+      background: none;
+      border: none;
+      color: var(--ink-soft);
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+      text-decoration: underline;
+      margin-top: 4px
+    }
+  </style>
 </head>
+
 <body>
-<div class="lock" id="lock">
-  <div class="lockbox">
-    <h2>🔒 Admin</h2>
-    <p>Enter your passcode to manage bookings.</p>
-    <input id="pass" type="password" inputmode="numeric" autocomplete="off" placeholder="••••••">
-    <button id="lock-btn" onclick="unlock()">Unlock</button>
-    <div class="lockerr" id="lock-err"></div>
-  </div>
-</div>
-
-<div class="wrap" id="app" style="display:none">
-  <header>
-    <h1>Booking Confirmations</h1>
-    <div class="sub">Verify payment in GoTyme + Messenger, then confirm.</div>
-    <button class="lockbtn" onclick="lock()">Lock this device</button>
-  </header>
-
-  <div class="toolbar">
-    <button id="tab-pending" class="active">⏳ Pending review</button>
-    <button id="tab-refunds">💸 Refunds due<span class="tabnum" id="refund-count" style="display:none">0</span></button>
-    <button id="tab-cal">📅 Calendar</button>
-  </div>
-
-  <div class="legend">
-    <div><span class="dot" style="background:var(--pending)"></span> Pending payment</div>
-    <div><span class="dot" style="background:var(--confirmed)"></span> Confirmed</div>
-    <div><span class="dot" style="background:var(--refund)"></span> Refund due</div>
-    <div><span class="dot" style="background:var(--blocked)"></span> Blocked</div>
-  </div>
-
-  <div id="pending-view">
-    <div class="loading" id="pending-loading">Loading bookings…</div>
-    <div id="pending-list"></div>
-  </div>
-
-  <div id="refunds-view" style="display:none">
-    <div id="refunds-list"></div>
-  </div>
-
-  <div id="cal-view" style="display:none">
-    <div class="card">
-      <div class="units">
-        <button id="unit-B301" class="on">B301 · 16F City View</button>
-        <button id="unit-B305">B305 · 15F Pool View</button>
-      </div>
-      <div class="calhead">
-        <div class="mon" id="mon">—</div>
-        <div class="nav"><button id="prev">‹</button><button id="next">›</button></div>
-      </div>
-      <div class="dow"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
-      <div class="grid" id="grid"></div>
-      <div class="hint" id="hint">Tap a <b>check-in</b> day, then a <b>check-out</b> day to block dates for a friend, a walk-in, or maintenance.</div>
+  <div class="lock" id="lock">
+    <div class="lockbox">
+      <h2>🔒 Admin</h2>
+      <p>Enter your passcode to manage bookings.</p>
+      <input id="pass" type="password" inputmode="numeric" autocomplete="off" placeholder="••••••">
+      <button id="lock-btn" onclick="unlock()">Unlock</button>
+      <div class="lockerr" id="lock-err"></div>
     </div>
   </div>
-</div>
 
-<!-- MODAL -->
-<div class="modal-bg" id="modal-bg">
-  <div class="modal" id="modal"></div>
-</div>
+  <div class="wrap" id="app" style="display:none">
+    <header>
+      <h1>Booking Confirmations</h1>
+      <div class="sub">Verify payment in GoTyme + Messenger, then confirm.</div>
+      <button class="lockbtn" onclick="lock()">Lock this device</button>
+    </header>
 
-<script>
-const SUPABASE_URL = "https://rbcqeuygpevabqwtdgva.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiY3FldXlncGV2YWJxd3RkZ3ZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5Njk2OTQsImV4cCI6MjEwMDU0NTY5NH0.X9qiG3XjGHzT-O5b8lO0DeJKzzJu_ocMr4LAh3-0WLA";
-// The single admin account created in Supabase Auth. The passcode below is its password.
-const ADMIN_EMAIL = "info@maidsruscleaning.com.au";
-const UNIT_LABELS = { B301:"B301 · 16F City View", B305:"B305 · 15F Pool View" };
-const REASONS = ["Personal use","Direct booking","Walk-in","Maintenance","Other"];
+    <div class="toolbar">
+      <button id="tab-pending" class="active">⏳ Pending review</button>
+      <button id="tab-refunds">💸 Refunds due<span class="tabnum" id="refund-count"
+          style="display:none">0</span></button>
+      <button id="tab-cal">📅 Calendar</button>
+    </div>
 
-let bookings = [];
-let view = new Date(); view.setDate(1);
-let selectedRole = null;
-let activeBooking = null;
-// Calendar tab only. calUnit decides which unit the pills — and any new block — belong to;
-// selStart/selEnd are the two taps that make a block range.
-let calUnit = "B301";
-let selStart = null, selEnd = null;
+    <div class="legend">
+      <div><span class="dot" style="background:var(--pending)"></span> Pending payment</div>
+      <div><span class="dot" style="background:var(--confirmed)"></span> Confirmed</div>
+      <div><span class="dot" style="background:var(--refund)"></span> Refund due</div>
+      <div><span class="dot" style="background:var(--blocked)"></span> Blocked</div>
+    </div>
 
-// Local-parts date string. toISOString() would shift PH time (UTC+8) back a day and the
-// booking pills would land on the wrong cells.
-const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-const parse = s => { const [y,m,d]=String(s).split('-').map(Number); return new Date(y,m-1,d); };
-const fmt = s => s ? parse(s).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : '';
+    <div id="pending-view">
+      <div class="loading" id="pending-loading">Loading bookings…</div>
+      <div id="pending-list"></div>
+    </div>
 
-// ===== PASSCODE =====
-// The passcode is the password of the single Supabase Auth admin account, so it is checked
-// by Supabase and never written into this file — it only ever lives in this browser after
-// you type it. What is stored here afterwards is a session token, not the passcode itself,
-// and it expires on its own. Every admin function refuses a request without a valid one, and
-// the bookings table is unreadable without it, so guest names and numbers stay private.
-// Changing the code means changing that account's password in the Supabase dashboard.
-const SESSION_NAME = 'saekyung_admin_session';
-let session = JSON.parse(localStorage.getItem(SESSION_NAME) || 'null');
+    <div id="refunds-view" style="display:none">
+      <div id="refunds-list"></div>
+    </div>
 
-function saveSession(s){
-  session = s;
-  localStorage.setItem(SESSION_NAME, JSON.stringify(s));
-}
+    <div id="cal-view" style="display:none">
+      <div class="card">
+        <div class="units">
+          <button id="unit-B301" class="on">B301 · 16F City View</button>
+          <button id="unit-B305">B305 · 15F Pool View</button>
+        </div>
+        <div class="calhead">
+          <div class="mon" id="mon">—</div>
+          <div class="nav"><button id="prev">‹</button><button id="next">›</button></div>
+        </div>
+        <div class="dow">
+          <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+        </div>
+        <div class="grid" id="grid"></div>
+        <div class="hint" id="hint">Tap a <b>check-in</b> day, then a <b>check-out</b> day to block dates for a friend,
+          a walk-in, or maintenance.</div>
+      </div>
+    </div>
+  </div>
 
-// Access tokens last about an hour, which is shorter than a session spent working through
-// pending bookings. Trade the refresh token for a new one rather than making them re-type.
-async function refreshSession(){
-  if(!session || !session.refresh_token) return false;
-  const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
-    body: JSON.stringify({ refresh_token: session.refresh_token })
-  });
-  if(!r.ok) return false;
-  saveSession(await r.json());
-  return true;
-}
+  <!-- MODAL -->
+  <div class="modal-bg" id="modal-bg">
+    <div class="modal" id="modal"></div>
+  </div>
 
-async function call(path, body, retried){
-  const r = await fetch(`${SUPABASE_URL}${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: {
-      'Content-Type':'application/json', 'Accept':'application/json',
-      'apikey': SUPABASE_ANON_KEY,
-      'Authorization': `Bearer ${session ? session.access_token : SUPABASE_ANON_KEY}`
-    },
-    body: body === undefined ? undefined : JSON.stringify(body)
-  });
-  if(r.status === 401 || r.status === 403){
-    // Expired mid-session: refresh once and replay. Only if that fails is the session
-    // genuinely dead and worth sending them back to the lock screen for.
-    if(!retried && await refreshSession()) return call(path, body, true);
-    lock('Your session has expired. Please enter the passcode again.');
-    throw new Error('Not signed in');
-  }
-  return r;
-}
+  <script>
+    const SUPABASE_URL = "https://rbcqeuygpevabqwtdgva.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJiY3FldXlncGV2YWJxd3RkZ3ZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5Njk2OTQsImV4cCI6MjEwMDU0NTY5NH0.X9qiG3XjGHzT-O5b8lO0DeJKzzJu_ocMr4LAh3-0WLA";
+    // The single admin account created in Supabase Auth. The passcode below is its password.
+    const ADMIN_EMAIL = "info@maidsruscleaning.com.au";
+    const UNIT_LABELS = { B301: "B301 · 16F City View", B305: "B305 · 15F Pool View" };
+    const REASONS = ["Personal use", "Direct booking", "Walk-in", "Maintenance", "Other"];
 
-// PostgREST returns the function's jsonb result directly.
-const rpc = (fn, args) => call(`/rest/v1/rpc/${fn}`, args || {}).then(r => r.json());
+    let bookings = [];
+    let view = new Date(); view.setDate(1);
+    let selectedRole = null;
+    let activeBooking = null;
+    // Calendar tab only. calUnit decides which unit the pills — and any new block — belong to;
+    // selStart/selEnd are the two taps that make a block range.
+    let calUnit = "B301";
+    let selStart = null, selEnd = null;
 
-function lock(msg){
-  session = null;
-  localStorage.removeItem(SESSION_NAME);
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('lock').classList.add('show');
-  const e = document.getElementById('lock-err');
-  e.textContent = msg || ''; e.style.display = msg ? 'block' : 'none';
-  document.getElementById('pass').value = '';
-}
+    // Local-parts date string. toISOString() would shift PH time (UTC+8) back a day and the
+    // booking pills would land on the wrong cells.
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const parse = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d); };
+    const fmt = s => s ? parse(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
-async function unlock(){
-  const typed = document.getElementById('pass').value.trim();
-  if(!typed) return;
-  const btn = document.getElementById('lock-btn');
-  const err = document.getElementById('lock-err');
-  btn.disabled = true; btn.textContent = 'Checking…';
-  err.style.display = 'none';
-  try{
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
-      body: JSON.stringify({ email: ADMIN_EMAIL, password: typed })
-    });
-    if(r.status === 400 || r.status === 401) throw new Error('Wrong passcode. Try again.');
-    if(!r.ok) throw new Error('Could not reach the server. Try again.');
-    saveSession(await r.json());
-    document.getElementById('lock').classList.remove('show');
-    document.getElementById('app').style.display = 'block';
-    load();
-  }catch(e){
-    err.textContent = e.message; err.style.display = 'block';
-  }finally{
-    btn.disabled = false; btn.textContent = 'Unlock';
-  }
-}
-document.getElementById('pass').addEventListener('keydown', e => { if(e.key === 'Enter') unlock(); });
+    // ===== PASSCODE =====
+    // The passcode is the password of the single Supabase Auth admin account, so it is checked
+    // by Supabase and never written into this file — it only ever lives in this browser after
+    // you type it. What is stored here afterwards is a session token, not the passcode itself,
+    // and it expires on its own. Every admin function refuses a request without a valid one, and
+    // the bookings table is unreadable without it, so guest names and numbers stay private.
+    // Changing the code means changing that account's password in the Supabase dashboard.
+    const SESSION_NAME = 'saekyung_admin_session';
+    let session = JSON.parse(localStorage.getItem(SESSION_NAME) || 'null');
 
-async function load(){
-  try{
-    // awaiting_payment is left out on purpose: those guests filled the form and never sent
-    // money, so they hold nothing, are owed nothing, and would only clutter the calendar.
-    const r = await call('/rest/v1/bookings' +
-      '?select=*&status=in.(pending_payment,confirmed,refund_due,refunded,blocked)' +
-      '&order=check_in.asc');
-    bookings = await r.json();
-    if(!Array.isArray(bookings)) bookings = [];
-  }catch(e){ bookings = []; }
-  renderPending();
-  renderRefunds();
-  renderCal();
-}
+    function saveSession(s) {
+      session = s;
+      localStorage.setItem(SESSION_NAME, JSON.stringify(s));
+    }
 
-// Everyone else still holding an unverified payment on the same unit+dates.
-// Confirming this booking will push all of them to refund_due, so they must be visible
-// BEFORE you click confirm — that is real money you'd be committing to send back.
-function competitors(b){
-  return bookings.filter(x =>
-    x.booking_id !== b.booking_id &&
-    x.status === 'pending_payment' &&
-    (x.unit||'B301') === (b.unit||'B301') &&
-    x.check_in < b.check_out && x.check_out > b.check_in
-  );
-}
+    // Access tokens last about an hour, which is shorter than a session spent working through
+    // pending bookings. Trade the refresh token for a new one rather than making them re-type.
+    async function refreshSession() {
+      if (!session || !session.refresh_token) return false;
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+        body: JSON.stringify({ refresh_token: session.refresh_token })
+      });
+      if (!r.ok) return false;
+      saveSession(await r.json());
+      return true;
+    }
 
-function renderPending(){
-  document.getElementById('pending-loading').style.display='none';
-  const wrap = document.getElementById('pending-list');
-  const pend = bookings.filter(b => b.status === 'pending_payment');
-  if(!pend.length){ wrap.innerHTML = '<div class="card" style="text-align:center;color:#888">No bookings waiting for confirmation right now. 🎉</div>'; return; }
-  // Contested dates first — those are the ones where dawdling costs you a refund.
-  const sorted = pend.slice().sort((a,b) => competitors(b).length - competitors(a).length);
-  wrap.innerHTML = sorted.map(b => {
-    const n = competitors(b).length;
-    return `
-    <div class="list-card ${n?'contested':''}">
-      <div class="info"><b>${b.guest_name||b.fb_name||'Guest'}</b> · ${UNIT_LABELS[b.unit]||b.unit}<br>
-        ${fmt(b.check_in)} → ${fmt(b.check_out)} · ${b.guests||1} guest(s)<br>
-        Ref <span class="ref">${b.payment_ref||'— none given —'}</span><br>
+    async function call(path, body, retried) {
+      const r = await fetch(`${SUPABASE_URL}${path}`, {
+        method: body === undefined ? 'GET' : 'POST',
+        headers: {
+          'Content-Type': 'application/json', 'Accept': 'application/json',
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session ? session.access_token : SUPABASE_ANON_KEY}`
+        },
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+      if (r.status === 401 || r.status === 403) {
+        // Expired mid-session: refresh once and replay. Only if that fails is the session
+        // genuinely dead and worth sending them back to the lock screen for.
+        if (!retried && await refreshSession()) return call(path, body, true);
+        lock('Your session has expired. Please enter the passcode again.');
+        throw new Error('Not signed in');
+      }
+      return r;
+    }
+
+    // PostgREST returns the function's jsonb result directly.
+    const rpc = (fn, args) => call(`/rest/v1/rpc/${fn}`, args || {}).then(r => r.json());
+
+    function lock(msg) {
+      session = null;
+      localStorage.removeItem(SESSION_NAME);
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('lock').classList.add('show');
+      const e = document.getElementById('lock-err');
+      e.textContent = msg || ''; e.style.display = msg ? 'block' : 'none';
+      document.getElementById('pass').value = '';
+    }
+
+    async function unlock() {
+      const typed = document.getElementById('pass').value.trim();
+      if (!typed) return;
+      const btn = document.getElementById('lock-btn');
+      const err = document.getElementById('lock-err');
+      btn.disabled = true; btn.textContent = 'Checking…';
+      err.style.display = 'none';
+      try {
+        const r = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY },
+          body: JSON.stringify({ email: ADMIN_EMAIL, password: typed })
+        });
+        if (r.status === 400 || r.status === 401) throw new Error('Wrong passcode. Try again.');
+        if (!r.ok) throw new Error('Could not reach the server. Try again.');
+        saveSession(await r.json());
+        document.getElementById('lock').classList.remove('show');
+        document.getElementById('app').style.display = 'block';
+        load();
+      } catch (e) {
+        err.textContent = e.message; err.style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Unlock';
+      }
+    }
+    document.getElementById('pass').addEventListener('keydown', e => { if (e.key === 'Enter') unlock(); });
+
+    async function load() {
+      try {
+        // awaiting_payment is left out on purpose: those guests filled the form and never sent
+        // money, so they hold nothing, are owed nothing, and would only clutter the calendar.
+        const r = await call('/rest/v1/bookings' +
+          '?select=*&status=in.(pending_payment,confirmed,refund_due,refunded,blocked)' +
+          '&order=check_in.asc');
+        bookings = await r.json();
+        if (!Array.isArray(bookings)) bookings = [];
+      } catch (e) { bookings = []; }
+      renderPending();
+      renderRefunds();
+      renderCal();
+    }
+
+    // Everyone else still holding an unverified payment on the same unit+dates.
+    // Confirming this booking will push all of them to refund_due, so they must be visible
+    // BEFORE you click confirm — that is real money you'd be committing to send back.
+    function competitors(b) {
+      return bookings.filter(x =>
+        x.booking_id !== b.booking_id &&
+        x.status === 'pending_payment' &&
+        (x.unit || 'B301') === (b.unit || 'B301') &&
+        x.check_in < b.check_out && x.check_out > b.check_in
+      );
+    }
+
+    function renderPending() {
+      document.getElementById('pending-loading').style.display = 'none';
+      const wrap = document.getElementById('pending-list');
+      const pend = bookings.filter(b => b.status === 'pending_payment');
+      if (!pend.length) { wrap.innerHTML = '<div class="card" style="text-align:center;color:#888">No bookings waiting for confirmation right now. 🎉</div>'; return; }
+      // Contested dates first — those are the ones where dawdling costs you a refund.
+      const sorted = pend.slice().sort((a, b) => competitors(b).length - competitors(a).length);
+      wrap.innerHTML = sorted.map(b => {
+        const n = competitors(b).length;
+        return `
+    <div class="list-card ${n ? 'contested' : ''}">
+      <div class="info"><b>${b.guest_name || b.fb_name || 'Guest'}</b> · ${UNIT_LABELS[b.unit] || b.unit}<br>
+        ${fmt(b.check_in)} → ${fmt(b.check_out)} · ${b.guests || 1} guest(s)<br>
+        Ref <span class="ref">${b.payment_ref || '— none given —'}</span><br>
         <span class="badge pending">Pending</span>
-        ${n?`<span class="badge clash">⚠️ ${n} other${n===1?'':'s'} paid for these dates</span>`:''}</div>
+        ${n ? `<span class="badge clash">⚠️ ${n} other${n === 1 ? '' : 's'} paid for these dates</span>` : ''}</div>
       <button class="review-btn" onclick="openModal('${b.booking_id}')">Review</button>
     </div>`;
-  }).join('');
-}
+      }).join('');
+    }
 
-function renderRefunds(){
-  const due = bookings.filter(b => b.status === 'refund_due');
-  const tab = document.getElementById('refund-count');
-  tab.style.display = due.length ? 'inline-block' : 'none';
-  tab.textContent = due.length;
-  const wrap = document.getElementById('refunds-list');
-  if(!due.length){ wrap.innerHTML = '<div class="card" style="text-align:center;color:#888">Nobody is owed a refund. 🎉</div>'; return; }
-  wrap.innerHTML = `<div class="clashbox"><b>These guests paid but lost the dates.</b>
+    function renderRefunds() {
+      const due = bookings.filter(b => b.status === 'refund_due');
+      const tab = document.getElementById('refund-count');
+      tab.style.display = due.length ? 'inline-block' : 'none';
+      tab.textContent = due.length;
+      const wrap = document.getElementById('refunds-list');
+      if (!due.length) { wrap.innerHTML = '<div class="card" style="text-align:center;color:#888">Nobody is owed a refund. 🎉</div>'; return; }
+      wrap.innerHTML = `<div class="clashbox"><b>These guests paid but lost the dates.</b>
       Send each of them ₱500 back through GoTyme, then mark it done here so it drops off the list.
       They have already been emailed that a refund is coming.</div>` +
-    due.map(b => `
+        due.map(b => `
     <div class="list-card contested">
-      <div class="info"><b>${b.guest_name||b.fb_name||'Guest'}</b> · ${UNIT_LABELS[b.unit]||b.unit}<br>
+      <div class="info"><b>${b.guest_name || b.fb_name || 'Guest'}</b> · ${UNIT_LABELS[b.unit] || b.unit}<br>
         ${fmt(b.check_in)} → ${fmt(b.check_out)}<br>
-        Ref <span class="ref">${b.payment_ref||'— none given —'}</span> · ${b.mobile||'no mobile'}<br>
+        Ref <span class="ref">${b.payment_ref || '— none given —'}</span> · ${b.mobile || 'no mobile'}<br>
         <span class="badge refund">Refund ₱500</span></div>
       <button class="refund-btn" onclick="markRefunded('${b.booking_id}', this)">Mark refunded ✓</button>
     </div>`).join('');
-}
-
-async function markRefunded(id, btn){
-  btn.disabled = true; btn.textContent = 'Saving…';
-  try{
-    const data = await rpc('mark_refunded', { p_booking_id: id });
-    if(!(data && data.ok)) throw new Error();
-    const b = bookings.find(x => x.booking_id === id);
-    if(b) b.status = 'refunded';
-    renderRefunds(); renderCal();
-  }catch(e){ btn.disabled = false; btn.textContent = 'Failed — retry'; }
-}
-
-// Half-open nights: a stay owns [check_in, check_out). Two ranges clash only when they
-// share a night, so check_out === other check_in is fine (same-day turnover).
-const overlaps = (aIn,aOut,bIn,bOut) => aIn < bOut && aOut > bIn;
-const nextDay = s => { const d = parse(s); d.setDate(d.getDate()+1); return iso(d); };
-
-// Dates that are already closed on this unit — a block on top of them would double-book.
-const blockersFor = (unit,ci,co) => bookings.filter(b =>
-  (b.unit||'B301') === unit &&
-  (b.status === 'confirmed' || b.status === 'blocked') &&
-  overlaps(ci, co, b.check_in, b.check_out));
-
-// Guests who have PAID but are not verified yet. Blocking does not touch them and does not
-// refund them — so they must be named before you commit, or someone is silently out ₱500.
-const holdsFor = (unit,ci,co) => bookings.filter(b =>
-  (b.unit||'B301') === unit &&
-  b.status === 'pending_payment' &&
-  overlaps(ci, co, b.check_in, b.check_out));
-
-function renderCal(){
-  const y=view.getFullYear(), m=view.getMonth();
-  document.getElementById('mon').textContent = new Date(y,m,1).toLocaleString('en-US',{month:'long',year:'numeric'});
-  const start=new Date(y,m,1).getDay(), days=new Date(y,m+1,0).getDate();
-  const selOut = selEnd ? blockRange().check_out : null;
-  let html='';
-  for(let i=0;i<start;i++) html+='<div class="day empty"></div>';
-  for(let d=1;d<=days;d++){
-    const dISO=iso(new Date(y,m,d));
-    const onDay = bookings.filter(b => (b.unit||'B301') === calUnit && dISO >= b.check_in && dISO < b.check_out);
-    const cls = s => s==='confirmed'?'confirmed' : s==='blocked'?'blocked' : s==='refund_due'?'refund' : 'pending';
-    const pills = onDay.map(b => `<div class="pill ${cls(b.status)}" onclick="event.stopPropagation();openModal('${b.booking_id}')">${(b.guest_name||b.unit||'').split(' ')[0]}</div>`).join('');
-    let sel = '';
-    if(selStart && !selEnd && dISO === selStart) sel = ' sel';
-    else if(selStart && selEnd){
-      if(dISO >= selStart && dISO < selOut) sel = ' sel';
-      else if(dISO === selOut) sel = ' selout';
     }
-    html += `<div class="day pick${sel}" onclick="dayTap('${dISO}')"><span class="n">${d}</span><div class="mk">${pills}</div></div>`;
-  }
-  document.getElementById('grid').innerHTML = html;
-  document.getElementById('hint').innerHTML = selStart && !selEnd
-    ? `Check-in <b>${fmt(selStart)}</b> — now tap the <b>check-out</b> day (or the same day again for a single night).`
-    : 'Tap a <b>check-in</b> day, then a <b>check-out</b> day to block dates for a friend, a walk-in, or maintenance.';
-}
 
-// The two taps are check-in and check-out, exactly like the guest calendar. Tapping the same
-// day twice means a single night, so check-out is the morning after.
-function blockRange(){
-  return { check_in: selStart, check_out: selEnd === selStart ? nextDay(selStart) : selEnd };
-}
+    async function markRefunded(id, btn) {
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const data = await rpc('mark_refunded', { p_booking_id: id });
+        if (!(data && data.ok)) throw new Error();
+        const b = bookings.find(x => x.booking_id === id);
+        if (b) b.status = 'refunded';
+        renderRefunds(); renderCal();
+      } catch (e) { btn.disabled = false; btn.textContent = 'Failed — retry'; }
+    }
 
-function dayTap(dISO){
-  if(!selStart || selEnd){ selStart = dISO; selEnd = null; renderCal(); return; }
-  if(dISO < selStart){ selStart = dISO; renderCal(); return; }  // tapped backwards — restart from there
-  selEnd = dISO;
-  renderCal();
-  openBlockModal();
-}
-function clearSel(){ selStart = null; selEnd = null; renderCal(); }
+    // Half-open nights: a stay owns [check_in, check_out). Two ranges clash only when they
+    // share a night, so check_out === other check_in is fine (same-day turnover).
+    const overlaps = (aIn, aOut, bIn, bOut) => aIn < bOut && aOut > bIn;
+    const nextDay = s => { const d = parse(s); d.setDate(d.getDate() + 1); return iso(d); };
 
-function openModal(id){
-  const b = bookings.find(x => x.booking_id === id);
-  if(!b) return;
-  if(b.status === 'blocked'){ openBlockDetail(b); return; }
-  activeBooking = b; selectedRole = null;
-  const isConfirmed = b.status === 'confirmed';
-  const rivals = competitors(b);
-  // You blocked these dates for yourself, yet here is a guest asking to be confirmed onto them.
-  // Confirming would double-book the unit, so say so before the button is pressed.
-  const blocks = blockersFor(b.unit||'B301', b.check_in, b.check_out).filter(x => x.status === 'blocked');
-  const m = document.getElementById('modal');
-  m.innerHTML = `
-    <h2>${b.guest_name||b.fb_name||'Guest'}</h2>
-    <div class="msub">${UNIT_LABELS[b.unit]||b.unit} · Ref ${b.booking_id}</div>
+    // Dates that are already closed on this unit — a block on top of them would double-book.
+    const blockersFor = (unit, ci, co) => bookings.filter(b =>
+      (b.unit || 'B301') === unit &&
+      (b.status === 'confirmed' || b.status === 'blocked') &&
+      overlaps(ci, co, b.check_in, b.check_out));
+
+    // Guests who have PAID but are not verified yet. Blocking does not touch them and does not
+    // refund them — so they must be named before you commit, or someone is silently out ₱500.
+    const holdsFor = (unit, ci, co) => bookings.filter(b =>
+      (b.unit || 'B301') === unit &&
+      b.status === 'pending_payment' &&
+      overlaps(ci, co, b.check_in, b.check_out));
+
+    function renderCal() {
+      const y = view.getFullYear(), m = view.getMonth();
+      document.getElementById('mon').textContent = new Date(y, m, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      const start = new Date(y, m, 1).getDay(), days = new Date(y, m + 1, 0).getDate();
+      const selOut = selEnd ? blockRange().check_out : null;
+      let html = '';
+      for (let i = 0; i < start; i++) html += '<div class="day empty"></div>';
+      for (let d = 1; d <= days; d++) {
+        const dISO = iso(new Date(y, m, d));
+        const onDay = bookings.filter(b => (b.unit || 'B301') === calUnit && dISO >= b.check_in && dISO < b.check_out && b.status !== 'declined' && b.status !== 'refunded');
+        const cls = s => s === 'confirmed' ? 'confirmed' : s === 'blocked' ? 'blocked' : s === 'refund_due' ? 'refund' : 'pending';
+        const pills = onDay.map(b => `<div class="pill ${cls(b.status)}" onclick="event.stopPropagation();openModal('${b.booking_id}')">${(b.guest_name || b.unit || '').split(' ')[0]}</div>`).join('');
+        let sel = '';
+        if (selStart && !selEnd && dISO === selStart) sel = ' sel';
+        else if (selStart && selEnd) {
+          if (dISO >= selStart && dISO < selOut) sel = ' sel';
+          else if (dISO === selOut) sel = ' selout';
+        }
+        html += `<div class="day pick${sel}" onclick="dayTap('${dISO}')"><span class="n">${d}</span><div class="mk">${pills}</div></div>`;
+      }
+      document.getElementById('grid').innerHTML = html;
+      document.getElementById('hint').innerHTML = selStart && !selEnd
+        ? `Check-in <b>${fmt(selStart)}</b> — now tap the <b>check-out</b> day (or the same day again for a single night).`
+        : 'Tap a <b>check-in</b> day, then a <b>check-out</b> day to block dates for a friend, a walk-in, or maintenance.';
+    }
+
+    // The two taps are check-in and check-out, exactly like the guest calendar. Tapping the same
+    // day twice means a single night, so check-out is the morning after.
+    function blockRange() {
+      return { check_in: selStart, check_out: selEnd === selStart ? nextDay(selStart) : selEnd };
+    }
+
+    function dayTap(dISO) {
+      if (!selStart || selEnd) { selStart = dISO; selEnd = null; renderCal(); return; }
+      if (dISO < selStart) { selStart = dISO; renderCal(); return; }  // tapped backwards — restart from there
+      selEnd = dISO;
+      renderCal();
+      openBlockModal();
+    }
+    function clearSel() { selStart = null; selEnd = null; renderCal(); }
+
+    function openModal(id) {
+      const b = bookings.find(x => x.booking_id === id);
+      if (!b) return;
+      if (b.status === 'blocked') { openBlockDetail(b); return; }
+      activeBooking = b; selectedRole = null;
+      const isConfirmed = b.status === 'confirmed';
+      const rivals = competitors(b);
+      // You blocked these dates for yourself, yet here is a guest asking to be confirmed onto them.
+      // Confirming would double-book the unit, so say so before the button is pressed.
+      const blocks = blockersFor(b.unit || 'B301', b.check_in, b.check_out).filter(x => x.status === 'blocked');
+      const m = document.getElementById('modal');
+      m.innerHTML = `
+    <h2>${b.guest_name || b.fb_name || 'Guest'}</h2>
+    <div class="msub">${UNIT_LABELS[b.unit] || b.unit} · Ref ${b.booking_id}</div>
     ${blocks.length && !isConfirmed ? `<div class="clashbox"><b>🚫 You have blocked these dates.</b>
-      ${blocks.map(x=>`${x.guest_name||'Manual block'} — ${fmt(x.check_in)} → ${fmt(x.check_out)}${x.notes?' ('+x.notes+')':''}`).join('<br>')}<br>
+      ${blocks.map(x => `${x.guest_name || 'Manual block'} — ${fmt(x.check_in)} → ${fmt(x.check_out)}${x.notes ? ' (' + x.notes + ')' : ''}`).join('<br>')}<br>
       Confirming this guest would double-book the unit. Remove the block first if you'd rather host them.</div>` : ''}
-    <div class="drow"><span class="k">Payment ref</span><span class="v ref">${b.payment_ref||'— none given —'}</span></div>
+    <div class="drow"><span class="k">Payment ref</span><span class="v ref">${b.payment_ref || '— none given —'}</span></div>
     <div class="drow"><span class="k">Check-in</span><span class="v">${fmt(b.check_in)}</span></div>
     <div class="drow"><span class="k">Check-out</span><span class="v">${fmt(b.check_out)}</span></div>
-    <div class="drow"><span class="k">Guests</span><span class="v">${b.guests||1}</span></div>
-    <div class="drow"><span class="k">Mobile</span><span class="v">${b.mobile||'—'}</span></div>
-    <div class="drow"><span class="k">Email</span><span class="v">${b.email||'—'}</span></div>
+    <div class="drow"><span class="k">Guests</span><span class="v">${b.guests || 1}</span></div>
+    <div class="drow"><span class="k">Mobile</span><span class="v">${b.mobile || '—'}</span></div>
+    <div class="drow"><span class="k">Email</span><span class="v">${b.email || '—'}</span></div>
     <div class="drow"><span class="k">Status</span><span class="v">${b.status}</span></div>
-    ${isConfirmed ? `<div class="already">✓ Already confirmed by ${b.confirmed_by||'—'}</div>
-      <div class="actions"><button class="btn-cancel" onclick="closeModal()" style="flex:1">Close</button></div>`
-    : `<div class="verify">💡 Before confirming: find <b>${b.payment_ref||'this guest\'s payment'}</b> in your GoTyme app and check it is ₱500.</div>
-      ${rivals.length ? `<div class="clashbox"><b>⚠️ Confirming this will refund ${rivals.length} other guest${rivals.length===1?'':'s'}.</b>
-        ${rivals.length===1?'This guest has':'These guests have'} also paid for the same dates. Confirming ${b.guest_name||'this guest'} will
-        mark ${rivals.length===1?'them':'them all'} refund_due and email ${rivals.length===1?'them':'them'} straight away — you'll owe
-        ₱${rivals.length*500} back in total.
-        <ul>${rivals.map(r=>`<li>${r.guest_name||r.fb_name||'Guest'} — ref <span class="ref">${r.payment_ref||'none'}</span></li>`).join('')}</ul>
+    ${isConfirmed ? `<div class="already">✓ Already confirmed by ${b.confirmed_by || '—'}</div>
+      <div class="actions"><button class="btn-cancel" onclick="closeModal()" style="flex:1">Close</button></div>
+      <button class="btn-decline" id="cancelBookingBtn" onclick="cancelConfirmedBooking()">Cancel this booking ✕</button>
+      <div class="msg" id="modal-msg"></div>`
+          : `<div class="verify">💡 Before confirming: find <b>${b.payment_ref || 'this guest\'s payment'}</b> in your GoTyme app and check it is ₱500.</div>
+      ${rivals.length ? `<div class="clashbox"><b>⚠️ Confirming this will refund ${rivals.length} other guest${rivals.length === 1 ? '' : 's'}.</b>
+        ${rivals.length === 1 ? 'This guest has' : 'These guests have'} also paid for the same dates. Confirming ${b.guest_name || 'this guest'} will
+        mark ${rivals.length === 1 ? 'them' : 'them all'} refund_due and email ${rivals.length === 1 ? 'them' : 'them'} straight away — you'll owe
+        ₱${rivals.length * 500} back in total.
+        <ul>${rivals.map(r => `<li>${r.guest_name || r.fb_name || 'Guest'} — ref <span class="ref">${r.payment_ref || 'none'}</span></li>`).join('')}</ul>
         Make sure you're confirming the payment that actually landed first.</div>` : ''}
       <div class="rolerow">Who is confirming?</div>
       <div class="roles">
@@ -467,164 +1096,218 @@ function openModal(id){
         <button class="btn-cancel" onclick="closeModal()">Cancel</button>
         <button class="btn-confirm" id="confirmBtn" onclick="confirmBooking()" disabled>Confirm payment ✓</button>
       </div>
+      <button class="btn-decline" id="declineBtn" onclick="declineBooking()">Decline this booking ✕</button>
       <div class="msg" id="modal-msg"></div>`}
   `;
-  document.getElementById('modal-bg').classList.add('show');
-}
-function pickRole(role){
-  selectedRole = role;
-  document.getElementById('role-owner').classList.toggle('sel', role==='Owner');
-  document.getElementById('role-agent').classList.toggle('sel', role==='Agent');
-  document.getElementById('confirmBtn').disabled = false;
-}
-function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); activeBooking=null; }
-// Backing out of the block modal must also drop the highlighted range, or the calendar keeps
-// showing a selection that no longer leads anywhere.
-function cancelBlock(){ closeModal(); clearSel(); }
-document.getElementById('modal-bg').addEventListener('click', e => { if(e.target.id==='modal-bg') closeModal(); });
+      document.getElementById('modal-bg').classList.add('show');
+    }
+    function pickRole(role) {
+      selectedRole = role;
+      document.getElementById('role-owner').classList.toggle('sel', role === 'Owner');
+      document.getElementById('role-agent').classList.toggle('sel', role === 'Agent');
+      document.getElementById('confirmBtn').disabled = false;
+    }
+    function closeModal() { document.getElementById('modal-bg').classList.remove('show'); activeBooking = null; }
+    // Backing out of the block modal must also drop the highlighted range, or the calendar keeps
+    // showing a selection that no longer leads anywhere.
+    function cancelBlock() { closeModal(); clearSel(); }
+    document.getElementById('modal-bg').addEventListener('click', e => { if (e.target.id === 'modal-bg') closeModal(); });
 
-function openBlockModal(){
-  const { check_in:ci, check_out:co } = blockRange();
-  const nights = Math.round((parse(co) - parse(ci)) / 86400000);
-  const clashes = blockersFor(calUnit, ci, co);
-  const holds = holdsFor(calUnit, ci, co);
-  const m = document.getElementById('modal');
-  m.innerHTML = `
+    function openBlockModal() {
+      const { check_in: ci, check_out: co } = blockRange();
+      const nights = Math.round((parse(co) - parse(ci)) / 86400000);
+      const clashes = blockersFor(calUnit, ci, co);
+      const holds = holdsFor(calUnit, ci, co);
+      const m = document.getElementById('modal');
+      m.innerHTML = `
     <h2>Block dates</h2>
     <div class="msub">${UNIT_LABELS[calUnit]}</div>
     <div class="drow"><span class="k">Check-in</span><span class="v">${fmt(ci)}</span></div>
     <div class="drow"><span class="k">Check-out</span><span class="v">${fmt(co)}</span></div>
     <div class="drow"><span class="k">Nights closed</span><span class="v">${nights}</span></div>
     ${clashes.length ? `<div class="clashbox"><b>⚠️ These dates are already taken.</b>
-      <ul>${clashes.map(c=>`<li>${c.guest_name||c.booking_id} — ${fmt(c.check_in)} → ${fmt(c.check_out)} (${c.status})</li>`).join('')}</ul>
+      <ul>${clashes.map(c => `<li>${c.guest_name || c.booking_id} — ${fmt(c.check_in)} → ${fmt(c.check_out)} (${c.status})</li>`).join('')}</ul>
       Pick dates that are actually free.</div>`
-    : `${holds.length ? `<div class="holdbox"><b>⚠️ ${holds.length} guest${holds.length===1?' has':'s have'} already paid ₱500 for these dates.</b>
-        <ul>${holds.map(h=>`<li>${h.guest_name||h.fb_name||'Guest'} — ref <span class="ref">${h.payment_ref||'none'}</span></li>`).join('')}</ul>
+          : `${holds.length ? `<div class="holdbox"><b>⚠️ ${holds.length} guest${holds.length === 1 ? ' has' : 's have'} already paid ₱500 for these dates.</b>
+        <ul>${holds.map(h => `<li>${h.guest_name || h.fb_name || 'Guest'} — ref <span class="ref">${h.payment_ref || 'none'}</span></li>`).join('')}</ul>
         Blocking does <b>not</b> cancel or refund them — it only closes the dates to new bookings.
-        ${holds.length===1?'That guest is':'Those guests are'} still sitting in your Pending review tab, and you'd owe
-        ₱${holds.length*500} back if you block ${holds.length===1?'them':'them all'} out. Sort the money out yourself.</div>` : ''}
+        ${holds.length === 1 ? 'That guest is' : 'Those guests are'} still sitting in your Pending review tab, and you'd owe
+        ₱${holds.length * 500} back if you block ${holds.length === 1 ? 'them' : 'them all'} out. Sort the money out yourself.</div>` : ''}
       <label>Label</label>
       <input id="blk-label" type="text" placeholder="e.g. Friend — Maria" autocomplete="off">
       <label>Reason</label>
-      <select id="blk-reason">${REASONS.map(r=>`<option value="${r}">${r}</option>`).join('')}</select>`}
+      <select id="blk-reason">${REASONS.map(r => `<option value="${r}">${r}</option>`).join('')}</select>`}
     <div class="actions">
       <button class="btn-cancel" onclick="cancelBlock()">Cancel</button>
       ${clashes.length ? '' : `<button class="btn-block" id="blockBtn" onclick="submitBlock()">Block these dates 🚫</button>`}
     </div>
     <div class="msg" id="modal-msg"></div>`;
-  document.getElementById('modal-bg').classList.add('show');
-}
+      document.getElementById('modal-bg').classList.add('show');
+    }
 
-async function submitBlock(){
-  const { check_in:ci, check_out:co } = blockRange();
-  const label = document.getElementById('blk-label').value.trim();
-  const reason = document.getElementById('blk-reason').value;
-  const btn = document.getElementById('blockBtn');
-  btn.disabled = true; btn.textContent = 'Blocking…';
-  try{
-    const data = await rpc('block_dates', {
-      p_unit: calUnit, p_check_in: ci, p_check_out: co, p_label: label, p_reason: reason });
-    if(!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
-    bookings.push({ booking_id: data.booking_id, unit: calUnit, check_in: ci, check_out: co,
-      status: 'blocked', guest_name: data.guest_name, notes: data.notes });
-    closeModal(); clearSel(); renderCal();
-  }catch(e){
-    btn.disabled = false; btn.textContent = 'Block these dates 🚫';
-    const msg = document.getElementById('modal-msg'); msg.style.display='block';
-    msg.style.background='#fbeeee'; msg.style.color='#9a3535';
-    // The server re-checks availability, so this is usually a genuine clash someone else created.
-    msg.textContent = e.message || 'Could not block those dates. Please try again.';
-  }
-}
+    async function submitBlock() {
+      const { check_in: ci, check_out: co } = blockRange();
+      const label = document.getElementById('blk-label').value.trim();
+      const reason = document.getElementById('blk-reason').value;
+      const btn = document.getElementById('blockBtn');
+      btn.disabled = true; btn.textContent = 'Blocking…';
+      try {
+        const data = await rpc('block_dates', {
+          p_unit: calUnit, p_check_in: ci, p_check_out: co, p_label: label, p_reason: reason
+        });
+        if (!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
+        bookings.push({
+          booking_id: data.booking_id, unit: calUnit, check_in: ci, check_out: co,
+          status: 'blocked', guest_name: data.guest_name, notes: data.notes
+        });
+        closeModal(); clearSel(); renderCal();
+      } catch (e) {
+        btn.disabled = false; btn.textContent = 'Block these dates 🚫';
+        const msg = document.getElementById('modal-msg'); msg.style.display = 'block';
+        msg.style.background = '#fbeeee'; msg.style.color = '#9a3535';
+        // The server re-checks availability, so this is usually a genuine clash someone else created.
+        msg.textContent = e.message || 'Could not block those dates. Please try again.';
+      }
+    }
 
-function openBlockDetail(b){
-  activeBooking = b;
-  const m = document.getElementById('modal');
-  m.innerHTML = `
-    <h2>🚫 ${b.guest_name||'Manual block'}</h2>
-    <div class="msub">${UNIT_LABELS[b.unit]||b.unit} · Ref ${b.booking_id}</div>
+    function openBlockDetail(b) {
+      activeBooking = b;
+      const m = document.getElementById('modal');
+      m.innerHTML = `
+    <h2>🚫 ${b.guest_name || 'Manual block'}</h2>
+    <div class="msub">${UNIT_LABELS[b.unit] || b.unit} · Ref ${b.booking_id}</div>
     <div class="drow"><span class="k">Check-in</span><span class="v">${fmt(b.check_in)}</span></div>
     <div class="drow"><span class="k">Check-out</span><span class="v">${fmt(b.check_out)}</span></div>
-    <div class="drow"><span class="k">Reason</span><span class="v">${b.notes||'—'}</span></div>
+    <div class="drow"><span class="k">Reason</span><span class="v">${b.notes || '—'}</span></div>
     <div class="verify">These dates are closed to guests. Removing the block opens them for booking again.</div>
     <div class="actions">
       <button class="btn-cancel" onclick="closeModal()">Close</button>
       <button class="btn-unblock" id="unblockBtn" onclick="unblockDates('${b.booking_id}')">Remove block ✓</button>
     </div>
     <div class="msg" id="modal-msg"></div>`;
-  document.getElementById('modal-bg').classList.add('show');
-}
+      document.getElementById('modal-bg').classList.add('show');
+    }
 
-async function unblockDates(id){
-  const btn = document.getElementById('unblockBtn');
-  btn.disabled = true; btn.textContent = 'Removing…';
-  try{
-    const data = await rpc('unblock', { p_booking_id: id });
-    if(!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
-    bookings = bookings.filter(x => x.booking_id !== id);
-    closeModal(); renderCal();
-  }catch(e){
-    btn.disabled = false; btn.textContent = 'Remove block ✓';
-    const msg = document.getElementById('modal-msg'); msg.style.display='block';
-    msg.style.background='#fbeeee'; msg.style.color='#9a3535';
-    msg.textContent = e.message || 'Could not remove the block. Please try again.';
-  }
-}
-
-async function confirmBooking(){
-  if(!activeBooking || !selectedRole) return;
-  const btn = document.getElementById('confirmBtn');
-  btn.disabled = true; btn.textContent = 'Confirming…';
-  try{
-    const data = await rpc('confirm_booking', {
-      p_booking_id: activeBooking.booking_id, p_confirmed_by: selectedRole });
-    if(data && data.ok){
-      const b = bookings.find(x=>x.booking_id===activeBooking.booking_id);
-      // Mirror the cascade the backend just ran, so the Refunds tab is right without a reload.
-      if(b){
-        competitors(b).forEach(r => { r.status = 'refund_due'; });
-        b.status='confirmed'; b.confirmed_by=selectedRole;
+    async function unblockDates(id) {
+      const btn = document.getElementById('unblockBtn');
+      btn.disabled = true; btn.textContent = 'Removing…';
+      try {
+        const data = await rpc('unblock', { p_booking_id: id });
+        if (!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
+        bookings = bookings.filter(x => x.booking_id !== id);
+        closeModal(); renderCal();
+      } catch (e) {
+        btn.disabled = false; btn.textContent = 'Remove block ✓';
+        const msg = document.getElementById('modal-msg'); msg.style.display = 'block';
+        msg.style.background = '#fbeeee'; msg.style.color = '#9a3535';
+        msg.textContent = e.message || 'Could not remove the block. Please try again.';
       }
-      closeModal(); renderPending(); renderRefunds(); renderCal();
-      if(data.refunds_due > 0){
-        alert(`Confirmed. ${data.refunds_due} other guest${data.refunds_due===1?' has':'s have'} been emailed a refund notice.\n\nYou now owe ₱${data.refunds_due*500} back — see the "Refunds due" tab.`);
+    }
+
+    async function declineBooking() {
+      if (!activeBooking) return;
+      if (!confirm(`Decline ${activeBooking.guest_name || activeBooking.fb_name || 'this guest'}'s booking? They already paid, so this moves them to "Refunds due" — you'll owe ₱500 back. This frees the dates and cannot be undone.`)) return;
+      const btn = document.getElementById('declineBtn');
+      const confirmBtn = document.getElementById('confirmBtn');
+      btn.disabled = true; btn.textContent = 'Declining…';
+      if (confirmBtn) confirmBtn.disabled = true;
+      try {
+        const data = await rpc('decline_booking', {
+          p_booking_id: activeBooking.booking_id, p_declined_by: selectedRole || 'Admin'
+        });
+        if (!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
+        const b = bookings.find(x => x.booking_id === activeBooking.booking_id);
+        if (b) b.status = 'refund_due';
+        closeModal(); renderPending(); renderRefunds(); renderCal();
+      } catch (e) {
+        btn.disabled = false; btn.textContent = 'Decline this booking ✕';
+        if (confirmBtn) confirmBtn.disabled = !selectedRole;
+        const msg = document.getElementById('modal-msg'); msg.style.display = 'block';
+        msg.style.background = '#fbeeee'; msg.style.color = '#9a3535';
+        msg.textContent = e.message || 'Could not decline. Please try again.';
       }
-    } else throw new Error();
-  }catch(e){
-    btn.disabled=false; btn.textContent='Confirm payment ✓';
-    const msg=document.getElementById('modal-msg'); msg.style.display='block'; msg.style.background='#fbeeee'; msg.style.color='#9a3535';
-    msg.textContent='Something went wrong. Please try again.';
-  }
-}
+    }
 
-const TABS = { pending:'pending-view', refunds:'refunds-view', cal:'cal-view' };
-function showTab(name){
-  Object.entries(TABS).forEach(([k,viewId]) => {
-    document.getElementById('tab-'+k).classList.toggle('active', k===name);
-    document.getElementById(viewId).style.display = (k===name) ? 'block' : 'none';
-  });
-}
-Object.keys(TABS).forEach(k => { document.getElementById('tab-'+k).onclick = () => showTab(k); });
-// A half-made selection must not survive a month change or a unit switch: the range would
-// silently span months, or land on the unit you just switched away from.
-document.getElementById('prev').onclick = () => { view.setMonth(view.getMonth()-1); clearSel(); };
-document.getElementById('next').onclick = () => { view.setMonth(view.getMonth()+1); clearSel(); };
-Object.keys(UNIT_LABELS).forEach(u => {
-  document.getElementById('unit-'+u).onclick = () => {
-    calUnit = u;
-    Object.keys(UNIT_LABELS).forEach(k => document.getElementById('unit-'+k).classList.toggle('on', k===u));
-    clearSel();
-  };
-});
+    async function cancelConfirmedBooking() {
+      if (!activeBooking) return;
+      if (!confirm(`Cancel ${activeBooking.guest_name || activeBooking.fb_name || 'this guest'}'s CONFIRMED booking? This undoes the confirmation, frees the dates, and moves them to "Refunds due" — you'll owe ₱500 back. This cannot be undone.`)) return;
+      const btn = document.getElementById('cancelBookingBtn');
+      btn.disabled = true; btn.textContent = 'Cancelling…';
+      try {
+        const data = await rpc('cancel_booking', {
+          p_booking_id: activeBooking.booking_id, p_cancelled_by: selectedRole || 'Admin'
+        });
+        if (!(data && data.ok)) throw new Error(data && data.error ? data.error : '');
+        const b = bookings.find(x => x.booking_id === activeBooking.booking_id);
+        if (b) b.status = 'refund_due';
+        closeModal(); renderPending(); renderRefunds(); renderCal();
+      } catch (e) {
+        btn.disabled = false; btn.textContent = 'Cancel this booking ✕';
+        const msg = document.getElementById('modal-msg'); msg.style.display = 'block';
+        msg.style.background = '#fbeeee'; msg.style.color = '#9a3535';
+        msg.textContent = e.message || 'Could not cancel. Please try again.';
+      }
+    }
 
-// A stored session is only a guess that it still works — load() goes through call(), which
-// refreshes an expired token once and drops to the lock screen if the session is really dead.
-if(session && session.refresh_token){
-  document.getElementById('app').style.display = 'block';
-  load();
-} else {
-  lock();
-}
-</script>
+    async function confirmBooking() {
+      if (!activeBooking || !selectedRole) return;
+      const btn = document.getElementById('confirmBtn');
+      const declineBtn = document.getElementById('declineBtn');
+      btn.disabled = true; btn.textContent = 'Confirming…';
+      if (declineBtn) declineBtn.disabled = true;
+      try {
+        const data = await rpc('confirm_booking', {
+          p_booking_id: activeBooking.booking_id, p_confirmed_by: selectedRole
+        });
+        if (data && data.ok) {
+          const b = bookings.find(x => x.booking_id === activeBooking.booking_id);
+          // Mirror the cascade the backend just ran, so the Refunds tab is right without a reload.
+          if (b) {
+            competitors(b).forEach(r => { r.status = 'refund_due'; });
+            b.status = 'confirmed'; b.confirmed_by = selectedRole;
+          }
+          closeModal(); renderPending(); renderRefunds(); renderCal();
+          if (data.refunds_due > 0) {
+            alert(`Confirmed. ${data.refunds_due} other guest${data.refunds_due === 1 ? ' has' : 's have'} been emailed a refund notice.\n\nYou now owe ₱${data.refunds_due * 500} back — see the "Refunds due" tab.`);
+          }
+        } else throw new Error();
+      } catch (e) {
+        btn.disabled = false; btn.textContent = 'Confirm payment ✓';
+        if (declineBtn) declineBtn.disabled = false;
+        const msg = document.getElementById('modal-msg'); msg.style.display = 'block'; msg.style.background = '#fbeeee'; msg.style.color = '#9a3535';
+        msg.textContent = 'Something went wrong. Please try again.';
+      }
+    }
+
+    const TABS = { pending: 'pending-view', refunds: 'refunds-view', cal: 'cal-view' };
+    function showTab(name) {
+      Object.entries(TABS).forEach(([k, viewId]) => {
+        document.getElementById('tab-' + k).classList.toggle('active', k === name);
+        document.getElementById(viewId).style.display = (k === name) ? 'block' : 'none';
+      });
+    }
+    Object.keys(TABS).forEach(k => { document.getElementById('tab-' + k).onclick = () => showTab(k); });
+    // A half-made selection must not survive a month change or a unit switch: the range would
+    // silently span months, or land on the unit you just switched away from.
+    document.getElementById('prev').onclick = () => { view.setMonth(view.getMonth() - 1); clearSel(); };
+    document.getElementById('next').onclick = () => { view.setMonth(view.getMonth() + 1); clearSel(); };
+    Object.keys(UNIT_LABELS).forEach(u => {
+      document.getElementById('unit-' + u).onclick = () => {
+        calUnit = u;
+        Object.keys(UNIT_LABELS).forEach(k => document.getElementById('unit-' + k).classList.toggle('on', k === u));
+        clearSel();
+      };
+    });
+
+    // A stored session is only a guess that it still works — load() goes through call(), which
+    // refreshes an expired token once and drops to the lock screen if the session is really dead.
+    if (session && session.refresh_token) {
+      document.getElementById('app').style.display = 'block';
+      load();
+    } else {
+      lock();
+    }
+  </script>
 </body>
+
 </html>
