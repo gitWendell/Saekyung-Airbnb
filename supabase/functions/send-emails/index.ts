@@ -29,6 +29,8 @@ type Payload = {
   payment_ref: string | null;
   amount: string;
   pay_url: string;
+  directory_passcode: string | null;
+  directory_url: string | null;
 };
 
 const fmt = (iso: string) =>
@@ -92,7 +94,15 @@ const templates: Record<string, (p: Payload) => { subject: string; html: string 
       <p>We matched your payment. The dates are now closed to everyone else — the room is yours.</p>
       ${stayBox(p)}
       <p>The ₱${p.amount} reservation fee comes off your balance on arrival. We'll message you
-      before check-in with directions and the key handover.</p>`),
+      before check-in with directions and the key handover.</p>
+      ${p.directory_passcode ? `<div style="background:#fdf6e8;border:1px solid #d8b879;border-radius:12px;padding:14px 16px;margin:16px 0;text-align:center">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8a6626;font-weight:600">Your guest directory passcode</div>
+        <div style="font-size:28px;font-weight:700;letter-spacing:.08em;margin:6px 0;font-family:ui-monospace,Menlo,monospace">${p.directory_passcode}</div>
+        <p style="font-size:13px;color:#4a5b60;margin:0 0 10px">WiFi, keys, pool passes and everything else for your unit.</p>
+        <a href="${p.directory_url}" style="display:inline-block;background:#8a6626;color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-weight:600;font-size:13px">
+          Open your guest directory
+        </a>
+      </div>` : ""}`),
   }),
 
   refund_due: (p) => ({

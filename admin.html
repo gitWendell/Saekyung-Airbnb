@@ -632,6 +632,94 @@
       color: var(--ink-soft)
     }
 
+    .drink-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 8px
+    }
+
+    .drink-row input[type="text"] {
+      flex: 2;
+      min-width: 120px
+    }
+
+    .drink-row input[type="number"] {
+      flex: 1;
+      min-width: 80px
+    }
+
+    .drink-row input {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit;
+      color: var(--ink)
+    }
+
+    .drink-row .d-avail {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 12px;
+      color: var(--ink-soft);
+      white-space: nowrap
+    }
+
+    .drink-row .btn-save,
+    .drink-row .btn-del {
+      border: none;
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap
+    }
+
+    .drink-row .btn-save {
+      background: var(--sea);
+      color: #fff
+    }
+
+    .drink-row .btn-del {
+      background: var(--refund-soft);
+      color: var(--refund)
+    }
+
+    .drink-add {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line)
+    }
+
+    .drink-add input {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 13px;
+      font-family: inherit
+    }
+
+    .drink-add input[type="text"] {
+      flex: 2;
+      min-width: 140px
+    }
+
+    .drink-add input[type="number"] {
+      flex: 1;
+      min-width: 80px
+    }
+
     .msg {
       text-align: center;
       padding: 10px;
@@ -759,6 +847,7 @@
       <button id="tab-refunds">💸 Refunds due<span class="tabnum" id="refund-count"
           style="display:none">0</span></button>
       <button id="tab-cal">📅 Calendar</button>
+      <button id="tab-drinks">🥤 Drinks</button>
     </div>
 
     <div class="legend">
@@ -795,6 +884,18 @@
           a walk-in, or maintenance.</div>
       </div>
     </div>
+
+    <div id="drinks-view" style="display:none">
+      <div class="card">
+        <div class="loading" id="drinks-loading">Loading drinks…</div>
+        <div id="drinks-list"></div>
+        <div class="drink-add">
+          <input id="new-drink-item" type="text" placeholder="Item name" autocomplete="off">
+          <input id="new-drink-price" type="number" step="0.01" min="0" placeholder="Price">
+          <button class="review-btn" onclick="addDrink()">+ Add drink</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- MODAL -->
@@ -818,6 +919,7 @@
     // selStart/selEnd are the two taps that make a block range.
     let calUnit = "B301";
     let selStart = null, selEnd = null;
+    let drinks = [];
 
     // Local-parts date string. toISOString() would shift PH time (UTC+8) back a day and the
     // booking pills would land on the wrong cells.
@@ -854,9 +956,9 @@
       return true;
     }
 
-    async function call(path, body, retried) {
+    async function call(path, body, method, retried) {
       const r = await fetch(`${SUPABASE_URL}${path}`, {
-        method: body === undefined ? 'GET' : 'POST',
+        method: method || (body === undefined ? 'GET' : 'POST'),
         headers: {
           'Content-Type': 'application/json', 'Accept': 'application/json',
           'apikey': SUPABASE_ANON_KEY,
@@ -867,7 +969,7 @@
       if (r.status === 401 || r.status === 403) {
         // Expired mid-session: refresh once and replay. Only if that fails is the session
         // genuinely dead and worth sending them back to the lock screen for.
-        if (!retried && await refreshSession()) return call(path, body, true);
+        if (!retried && await refreshSession()) return call(path, body, method, true);
         lock('Your session has expired. Please enter the passcode again.');
         throw new Error('Not signed in');
       }
@@ -927,6 +1029,71 @@
       renderPending();
       renderRefunds();
       renderCal();
+      loadDrinks();
+    }
+
+    async function loadDrinks() {
+      try {
+        const r = await call('/rest/v1/drinks?select=*&order=id.asc');
+        drinks = await r.json();
+        if (!Array.isArray(drinks)) drinks = [];
+      } catch (e) { drinks = []; }
+      document.getElementById('drinks-loading').style.display = 'none';
+      renderDrinks();
+    }
+
+    function renderDrinks() {
+      const wrap = document.getElementById('drinks-list');
+      if (!drinks.length) { wrap.innerHTML = '<div class="card" style="text-align:center;color:#888">No drinks yet — add one below.</div>'; return; }
+      wrap.innerHTML = drinks.map(d => `
+        <div class="drink-row" data-id="${d.id}">
+          <input type="text" class="d-item" value="${d.item}">
+          <input type="number" step="0.01" min="0" class="d-price" value="${d.price}">
+          <label class="d-avail"><input type="checkbox" class="d-available" ${d.available ? 'checked' : ''}> For sale</label>
+          <button class="btn-save" onclick="saveDrink(${d.id})">Save</button>
+          <button class="btn-del" onclick="deleteDrink(${d.id})">Delete</button>
+        </div>`).join('');
+    }
+
+    async function saveDrink(id) {
+      const row = document.querySelector(`.drink-row[data-id="${id}"]`);
+      const item = row.querySelector('.d-item').value.trim();
+      const price = parseFloat(row.querySelector('.d-price').value);
+      const available = row.querySelector('.d-available').checked;
+      if (!item || isNaN(price) || price < 0) { alert('Enter a valid item name and price.'); return; }
+      const btn = row.querySelector('.btn-save');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const r = await call(`/rest/v1/drinks?id=eq.${id}`, { item, price, available }, 'PATCH');
+        if (!r.ok) throw new Error('failed');
+        const d = drinks.find(x => x.id === id);
+        if (d) { d.item = item; d.price = price; d.available = available; }
+      } catch (e) { alert('Could not save. Try again.'); }
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+
+    async function deleteDrink(id) {
+      if (!confirm('Delete this drink?')) return;
+      try {
+        const r = await call(`/rest/v1/drinks?id=eq.${id}`, undefined, 'DELETE');
+        if (!r.ok) throw new Error('failed');
+        drinks = drinks.filter(x => x.id !== id);
+        renderDrinks();
+      } catch (e) { alert('Could not delete. Try again.'); }
+    }
+
+    async function addDrink() {
+      const itemEl = document.getElementById('new-drink-item');
+      const priceEl = document.getElementById('new-drink-price');
+      const item = itemEl.value.trim();
+      const price = parseFloat(priceEl.value);
+      if (!item || isNaN(price) || price < 0) { alert('Enter a valid item name and price.'); return; }
+      try {
+        const r = await call('/rest/v1/drinks', { item, price, available: true }, 'POST');
+        if (!r.ok) throw new Error('failed');
+        itemEl.value = ''; priceEl.value = '';
+        await loadDrinks();
+      } catch (e) { alert('Could not add drink. Try again.'); }
     }
 
     // Everyone else still holding an unverified payment on the same unit+dates.
@@ -1077,6 +1244,7 @@
     <div class="drow"><span class="k">Email</span><span class="v">${b.email || '—'}</span></div>
     <div class="drow"><span class="k">Status</span><span class="v">${b.status}</span></div>
     ${isConfirmed ? `<div class="already">✓ Already confirmed by ${b.confirmed_by || '—'}</div>
+      <div class="drow"><span class="k">Directory passcode</span><span class="v ref">${b.directory_passcode || '—'}</span></div>
       <div class="actions"><button class="btn-cancel" onclick="closeModal()" style="flex:1">Close</button></div>
       <button class="btn-decline" id="cancelBookingBtn" onclick="cancelConfirmedBooking()">Cancel this booking ✕</button>
       <div class="msg" id="modal-msg"></div>`
@@ -1279,7 +1447,7 @@
       }
     }
 
-    const TABS = { pending: 'pending-view', refunds: 'refunds-view', cal: 'cal-view' };
+    const TABS = { pending: 'pending-view', refunds: 'refunds-view', cal: 'cal-view', drinks: 'drinks-view' };
     function showTab(name) {
       Object.entries(TABS).forEach(([k, viewId]) => {
         document.getElementById('tab-' + k).classList.toggle('active', k === name);
