@@ -242,12 +242,27 @@ async function rpc(fn,args){
 }
 const redeem=passcode=>rpc('redeem_passcode',{p_passcode:passcode});
 
+/* Same account admin.html signs into — whatever passcode unlocks the admin dashboard also
+   unlocks "browse any unit" here. Nothing admin-specific is hardcoded: this just asks
+   Supabase Auth whether the typed value is that account's current password. */
+const ADMIN_EMAIL="info@maidsruscleaning.com.au";
+async function isAdminPasscode(passcode){
+  try{
+    const r=await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPABASE_ANON_KEY},
+      body:JSON.stringify({email:ADMIN_EMAIL,password:passcode})
+    });
+    return r.ok;
+  }catch(e){return false;}
+}
+
 const SESSION_KEY='sk_guest_session';
 const loadSession=()=>{try{return JSON.parse(localStorage.getItem(SESSION_KEY));}catch(e){return null;}};
 const saveSession=s=>localStorage.setItem(SESSION_KEY,JSON.stringify(s));
 const clearSession=()=>localStorage.removeItem(SESSION_KEY);
 
-let state={unit:null,booking:null};
+let state={unit:null,booking:null,admin:false};
 const $=id=>document.getElementById(id);
 const S=(inner,a)=>`<svg viewBox="0 0 24 24" ${a||''}>${inner}</svg>`;
 const stagger=(sel,base,step)=>{document.querySelectorAll(sel).forEach((el,i)=>el.style.animationDelay=(base+i*step)+'s')};
@@ -288,9 +303,13 @@ async function tryUnlock(){
       const sess={...r,passcode:val.toUpperCase()};
       saveSession(sess);
       enterWithSession(sess);
-    } else {
-      renderLock('That passcode wasn\u2019t recognized. Double-check it or message Diana.');
+      return;
     }
+    if(await isAdminPasscode(val)){
+      enterAdminMode();
+      return;
+    }
+    renderLock('That passcode wasn\u2019t recognized. Double-check it or message Diana.');
   }catch(e){
     renderLock('Couldn\u2019t reach the server. Check your connection and try again.');
   }
@@ -298,11 +317,43 @@ async function tryUnlock(){
 function enterWithSession(sess){
   state.unit=String(sess.unit||'').toLowerCase();
   state.booking=sess;
+  state.admin=false;
   if(!UNITS[state.unit]){renderLock('Your unit isn\u2019t set up in the directory yet \u2014 please message Diana.');return;}
   renderMenu();
   scrollTo(0,0);
 }
-function logOut(){clearSession();state={unit:null,booking:null};swap(renderLock,'zoutBack','zback');}
+function enterAdminMode(){
+  state={unit:null,booking:null,admin:true};
+  renderAdminPicker();
+  scrollTo(0,0);
+}
+function renderAdminPicker(){
+  const c=$('col');
+  c.innerHTML=`
+    <div class="brandrow r" style="animation-delay:.02s">
+      <div class="m">${S(HOUSE.replace(/stroke-width/g,'')||HOUSE,'viewBox="0 0 100 100"')}</div>
+      <div class="t"><b>Diana's Saekyung Stay</b><s>Guest Directory \u00b7 Admin view</s></div>
+    </div>
+    <div class="lead r" style="animation-delay:.08s">
+      <h1 class="serif">Browse any unit</h1>
+      <p>Admin view \u2014 pick a unit to preview its guest directory.</p>
+    </div>
+    <div class="rooms">${Object.keys(UNITS).map((id,i)=>{const u=UNITS[id];
+      return `<button class="room r" style="animation-delay:${.16+i*.07}s" onclick="openAdminUnit('${id}')">
+        <div class="pic"><img src="${u.image}" alt="${u.name}"></div>
+        <div class="body">
+          <span class="tag"><span class="dot"></span>${u.tag} \u00b7 ${u.floor}</span>
+          <h3 class="serif">${u.name}</h3><div class="u">${u.unit}</div>
+        </div>
+        <span class="arw">${S('<path d="M5 12h14M13 6l6 6-6 6"/>')}</span>
+      </button>`}).join('')}</div>
+    <div class="note r" style="animation-delay:.4s;margin-top:18px">
+      <a href="#" onclick="event.preventDefault();logOut()" style="color:var(--gold);font-weight:600">Exit admin view</a>
+    </div>`;
+}
+function openAdminUnit(id){state.unit=id;state.booking=null;swap(renderMenu,'zout','zin');}
+function backFromMenu(){state.admin?swap(renderAdminPicker,'zoutBack','zback'):logOut();}
+function logOut(){clearSession();state={unit:null,booking:null,admin:false};swap(renderLock,'zoutBack','zback');}
 
 async function boot(){
   const qs=new URLSearchParams(location.search);
@@ -342,7 +393,7 @@ function renderMenu(){
   const u=UNITS[state.unit],c=$('col');
   c.innerHTML=`
     <div class="top r" style="animation-delay:.02s">
-      <button class="back" onclick="logOut()">${S('<path d="M15 18l-6-6 6-6"/>')}</button>
+      <button class="back" onclick="backFromMenu()">${S('<path d="M15 18l-6-6 6-6"/>')}</button>
       <div class="ti"><b>${u.name}</b><s>${u.tag} \u00B7 ${u.unit}</s></div>
     </div>
     <div class="hero r" style="animation-delay:.06s"><img src="${u.image}" alt="${u.name}">
