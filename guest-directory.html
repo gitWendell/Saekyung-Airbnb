@@ -175,7 +175,7 @@ button{font-family:inherit}
 
 /* ---------- passcode lock screen ---------- */
 .pcinput{width:100%;padding:18px;border:1px solid var(--hair);border-radius:16px;font-size:22px;font-weight:600;
-  text-align:center;letter-spacing:.16em;text-transform:uppercase;font-family:ui-monospace,Menlo,monospace;
+  text-align:center;letter-spacing:.16em;font-family:ui-monospace,Menlo,monospace;
   background:var(--surface);color:var(--ink)}
 .pcinput:focus{outline:none;border-color:var(--gold);box-shadow:0 0 0 3px var(--goldTint)}
 .pcbtn{width:100%;margin-top:14px;padding:16px;background:var(--gold);color:#fff;border:none;border-radius:14px;
@@ -285,7 +285,7 @@ function renderLock(err){
       <h1 class="serif">Enter your<br>guest passcode</h1>
       <p>Check your confirmation email for the passcode Diana sent once your booking was confirmed.</p>
     </div>
-    <input id="pcin" class="pcinput r" style="animation-delay:.14s" maxlength="8" placeholder="\u2022 \u2022 \u2022 \u2022 \u2022 \u2022" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">
+    <input id="pcin" class="pcinput r" style="animation-delay:.14s" placeholder="\u2022 \u2022 \u2022 \u2022 \u2022 \u2022" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
     <button class="pcbtn r" style="animation-delay:.18s" onclick="tryUnlock()">Unlock my directory</button>
     ${err?`<div class="pcerr r" style="animation-delay:.22s;margin-top:12px">${err}</div>`:''}`;
   const inp=$('pcin');
